@@ -1,0 +1,11 @@
+.env
+tmp/
+bin/
+node_modules/
+# Сборка Mini App не коммитится, но заглушка index.html нужна:
+# embed.FS не соберётся, если каталога dist нет в свежем клоне.
+web/dist/*
+!web/dist/index.html
+.idea/
+.DS_Store
+coverage.out
