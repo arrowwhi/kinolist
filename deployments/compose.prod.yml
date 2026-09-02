@@ -1,0 +1,68 @@
+name: kinolist
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-kinolist}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  migrate:
+    image: ghcr.io/kukymbr/goose-docker:3.25.0
+    environment:
+      GOOSE_DRIVER: postgres
+      GOOSE_DBSTRING: ${POSTGRES_DSN:?set POSTGRES_DSN}
+    volumes:
+      - ../migrations:/migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app:
+    build:
+      context: ..
+      dockerfile: deployments/docker/Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+        COMMIT: ${COMMIT:-none}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+    env_file: ../.env
+    expose:
+      - "8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # Caddy сам получает и продлевает сертификат Let's Encrypt — Mini App
+  # без валидного HTTPS не откроется вовсе.
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

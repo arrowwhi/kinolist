@@ -1,0 +1,18 @@
+{$DOMAIN} {
+	encode zstd gzip
+
+	# /metrics наружу не выставляется: он для локального Prometheus,
+	# а не для всего интернета.
+	handle /metrics {
+		respond 404
+	}
+
+	reverse_proxy app:8080 {
+		health_uri /healthz
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

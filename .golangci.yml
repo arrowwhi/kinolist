@@ -1,0 +1,62 @@
+version: "2"
+
+run:
+  timeout: 5m
+  build-tags:
+    - integration
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - bodyclose
+    - contextcheck
+    - copyloopvar
+    - dupl
+    - errorlint
+    - gocritic
+    - goconst
+    - gosec
+    - misspell
+    - nilerr
+    - noctx
+    - prealloc
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - unconvert
+    - wastedassign
+    - whitespace
+  settings:
+    dupl:
+      threshold: 150
+    goconst:
+      min-len: 3
+      min-occurrences: 4
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - dupl
+          - gosec
+          - goconst
+      - path: internal/repository/postgres
+        linters:
+          - dupl
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/arrowwhi/kinolist

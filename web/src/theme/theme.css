@@ -1,0 +1,68 @@
+/* Палитра берётся из Telegram: приложение обязано выглядеть частью клиента,
+   поэтому собственных цветов фона и текста здесь нет — только запасные
+   значения на случай запуска вне Telegram. */
+:root {
+  --bg: var(--tg-theme-bg-color, #ffffff);
+  --bg-secondary: var(--tg-theme-secondary-bg-color, #f2f2f7);
+  --surface: var(--tg-theme-section-bg-color, #ffffff);
+  --text: var(--tg-theme-text-color, #0f0f0f);
+  --hint: var(--tg-theme-hint-color, #8e8e93);
+  --link: var(--tg-theme-link-color, #2481cc);
+  --accent: var(--tg-theme-button-color, #2481cc);
+  --accent-text: var(--tg-theme-button-text-color, #ffffff);
+  --destructive: var(--tg-theme-destructive-text-color, #e53935);
+
+  --radius-sm: 10px;
+  --radius: 16px;
+  --radius-lg: 22px;
+  --gap: 12px;
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+
+  color-scheme: light dark;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto,
+    system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+  overscroll-behavior-y: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

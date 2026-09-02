@@ -1,0 +1,353 @@
+openapi: 3.1.0
+
+info:
+  title: kinolist API
+  version: 1.0.0
+  description: |
+    API телеграм-мини-приложения для коллекции фильмов.
+
+    Авторизация — подпись Telegram Mini App `initData` в заголовке
+    `X-Telegram-Init-Data` (или `Authorization: tma <initData>`).
+    Пользователь заводится автоматически при первом обращении.
+
+servers:
+  - url: /api/v1
+
+security:
+  - telegramInitData: []
+
+paths:
+  /me:
+    get:
+      summary: Текущий пользователь
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /genres:
+    get:
+      summary: Справочник жанров
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Genre' }
+
+  /movies:
+    get:
+      summary: Коллекция пользователя
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/Status' }
+        - name: genre_ids
+          in: query
+          description: Идентификаторы жанров через запятую
+          schema: { type: string, example: "15,18" }
+        - name: q
+          in: query
+          description: Поиск по названию и оригинальному названию
+          schema: { type: string }
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [added_at, title, year, rating]
+            default: added_at
+        - name: order
+          in: query
+          schema: { type: string, enum: [asc, desc], default: desc }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MovieList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /movies/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      summary: Карточка фильма из коллекции
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserMovie' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      summary: Изменить статус, оценку или заметку
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateMovieRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserMovie' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      summary: Удалить фильм из коллекции
+      responses:
+        '204': { description: Удалён }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /jobs:
+    post:
+      summary: Начать поиск фильма
+      description: |
+        Принимает ссылку на рилс Instagram или название фильма — сервис сам
+        определяет тип. Отвечает сразу: поиск выполняется фоновым воркером,
+        клиент опрашивает `GET /jobs/{id}` до статуса `confirming` или `failed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateJobRequest' }
+      responses:
+        '202':
+          description: Задача принята
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Job' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '503':
+          description: Разбор ссылок недоступен — доступен только ввод названия
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /jobs/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      summary: Состояние задачи и найденные кандидаты
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Job' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /jobs/{id}/confirm:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      summary: Подтвердить выбранный фильм
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConfirmJobRequest' }
+      responses:
+        '201':
+          description: Фильм добавлен
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserMovie' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409':
+          description: Фильм уже в коллекции
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /jobs/{id}/reject:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      summary: Отменить задачу
+      responses:
+        '204': { description: Отменена }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+  securitySchemes:
+    telegramInitData:
+      type: apiKey
+      in: header
+      name: X-Telegram-Init-Data
+
+  responses:
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Недействительная подпись Telegram
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Не найдено
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, example: already_in_collection }
+        message: { type: string, example: Фильм уже в коллекции }
+
+    Status:
+      type: string
+      enum: [want_to_watch, watched]
+
+    Me:
+      type: object
+      required: [id]
+      properties:
+        id: { type: integer, format: int64 }
+        username: { type: string }
+        first_name: { type: string }
+
+    Genre:
+      type: object
+      required: [id, name_ru, name_en]
+      properties:
+        id: { type: integer }
+        name_ru: { type: string, example: фантастика }
+        name_en: { type: string, example: Science Fiction }
+
+    Movie:
+      type: object
+      required: [id, title, overview, genres]
+      properties:
+        id: { type: integer, format: int64 }
+        tmdb_id: { type: integer }
+        kinopoisk_id: { type: integer }
+        title: { type: string }
+        original_title: { type: string }
+        year: { type: integer }
+        overview: { type: string }
+        poster_url: { type: string, format: uri }
+        runtime_min: { type: integer }
+        rating: { type: number, format: float }
+        genres:
+          type: array
+          items: { $ref: '#/components/schemas/Genre' }
+
+    UserMovie:
+      type: object
+      required: [id, movie, status, source, added_at]
+      properties:
+        id: { type: integer, format: int64 }
+        movie: { $ref: '#/components/schemas/Movie' }
+        status: { $ref: '#/components/schemas/Status' }
+        user_rating: { type: integer, minimum: 1, maximum: 10 }
+        note: { type: string }
+        source: { type: string, enum: [reel, manual] }
+        source_url: { type: string }
+        added_at: { type: string, format: date-time }
+        watched_at: { type: string, format: date-time }
+
+    MovieList:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/UserMovie' }
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    UpdateMovieRequest:
+      type: object
+      minProperties: 1
+      properties:
+        status: { $ref: '#/components/schemas/Status' }
+        user_rating:
+          type: integer
+          minimum: 0
+          maximum: 10
+          description: 0 снимает оценку
+        note: { type: string }
+
+    CreateJobRequest:
+      type: object
+      required: [input]
+      properties:
+        input:
+          type: string
+          description: Ссылка на рилс Instagram либо название фильма
+          example: https://www.instagram.com/reel/Cx1y2Z3aBcD/
+
+    Candidate:
+      type: object
+      required: [provider, external_id, title, overview]
+      properties:
+        provider: { type: string, enum: [tmdb, kinopoisk] }
+        external_id: { type: integer }
+        title: { type: string }
+        year: { type: integer }
+        overview: { type: string }
+        poster_url: { type: string, format: uri }
+        rating: { type: number, format: float }
+
+    Job:
+      type: object
+      required: [id, kind, status, candidates]
+      properties:
+        id: { type: integer, format: int64 }
+        kind: { type: string, enum: [reel, title] }
+        status:
+          type: string
+          enum: [pending, processing, confirming, done, failed, cancelled]
+        query_title: { type: string }
+        query_year: { type: integer }
+        source_url: { type: string }
+        candidates:
+          type: array
+          items: { $ref: '#/components/schemas/Candidate' }
+        error:
+          type: string
+          description: Заполняется только при status=failed
+
+    ConfirmJobRequest:
+      type: object
+      required: [provider, external_id]
+      properties:
+        provider: { type: string, enum: [tmdb, kinopoisk] }
+        external_id: { type: integer }
