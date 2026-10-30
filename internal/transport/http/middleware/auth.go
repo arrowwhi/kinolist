@@ -12,6 +12,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
+
+	"github.com/arrowwhi/kinolist/internal/pkg/logger"
 )
 
 type ctxKey struct{}
@@ -47,18 +51,23 @@ func TelegramAuth(botToken string, resolve func(context.Context, Identity) (int6
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			raw := initDataFrom(r)
 			if raw == "" {
+				logger.From(r.Context()).Warn("telegram auth rejected", zap.Error(ErrMissingInitData))
 				writeAuthError(w, ErrMissingInitData)
 				return
 			}
 
 			identity, err := ParseInitData(raw, secretKey, time.Now())
 			if err != nil {
+				logger.From(r.Context()).Warn("telegram auth rejected", zap.Error(err))
 				writeAuthError(w, err)
 				return
 			}
 
 			userID, err := resolve(r.Context(), identity)
 			if err != nil {
+				// Подпись верна, упал сбор пользователя — без лога это
+				// неотличимо от подделки, клиент видит тот же 401.
+				logger.From(r.Context()).Error("resolve telegram user failed", zap.Error(err))
 				writeAuthError(w, err)
 				return
 			}
@@ -109,8 +118,34 @@ func ParseInitData(raw string, secretKey []byte, now time.Time) (Identity, error
 		return Identity{}, ErrBadSignature
 	}
 	values.Del("hash")
-	values.Del("signature")
 
+	// Поле signature (Ed25519 для сторонних проверяющих) клиенты Telegram
+	// присылают с Bot API 8.0. Документация включает его в строку для hash,
+	// часть реализаций — нет; принимаем оба варианта. Ослаблением это не
+	// является: обе строки подписаны тем же секретом бота.
+	valid := hashMatches(values, secretKey, providedHash)
+	if !valid && values.Has("signature") {
+		values.Del("signature")
+		valid = hashMatches(values, secretKey, providedHash)
+	}
+	if !valid {
+		return Identity{}, ErrBadSignature
+	}
+
+	if authDate := values.Get("auth_date"); authDate != "" {
+		ts, err := strconv.ParseInt(authDate, 10, 64)
+		if err != nil {
+			return Identity{}, ErrBadSignature
+		}
+		if now.Sub(time.Unix(ts, 0)) > initDataTTL {
+			return Identity{}, ErrExpiredInitData
+		}
+	}
+
+	return parseUserField(values.Get("user"))
+}
+
+func hashMatches(values url.Values, secretKey []byte, providedHash string) bool {
 	keys := make([]string, 0, len(values))
 	for k := range values {
 		keys = append(keys, k)
@@ -131,21 +166,7 @@ func ParseInitData(raw string, secretKey []byte, now time.Time) (Identity, error
 	mac.Write([]byte(b.String()))
 	expected := hex.EncodeToString(mac.Sum(nil))
 
-	if !hmac.Equal([]byte(expected), []byte(providedHash)) {
-		return Identity{}, ErrBadSignature
-	}
-
-	if authDate := values.Get("auth_date"); authDate != "" {
-		ts, err := strconv.ParseInt(authDate, 10, 64)
-		if err != nil {
-			return Identity{}, ErrBadSignature
-		}
-		if now.Sub(time.Unix(ts, 0)) > initDataTTL {
-			return Identity{}, ErrExpiredInitData
-		}
-	}
-
-	return parseUserField(values.Get("user"))
+	return hmac.Equal([]byte(expected), []byte(providedHash))
 }
 
 func parseUserField(raw string) (Identity, error) {
