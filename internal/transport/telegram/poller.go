@@ -3,11 +3,17 @@ package telegram
 import (
 	"context"
 	"errors"
+	"net/http"
 	"sync"
 	"time"
 
 	"go.uber.org/zap"
 )
+
+// conflictRetry — пауза при 409 от getUpdates. Короткая и без роста:
+// конфликт снимается, как только старый экземпляр остановится, и забрать
+// опрос нужно сразу, а не через полминуты отката.
+const conflictRetry = 3 * time.Second
 
 // Poller получает апдейты через getUpdates. Режим для локальной разработки:
 // не требует публичного адреса.
@@ -35,6 +41,7 @@ func (p *Poller) Run(ctx context.Context) error {
 
 	var offset int64
 	backoff := time.Second
+	inConflict := false
 
 	for {
 		if ctx.Err() != nil {
@@ -49,21 +56,40 @@ func (p *Poller) Run(ctx context.Context) error {
 				return nil //nolint:nilerr // штатная остановка по отмене контекста — не ошибка
 			}
 
-			p.log.Warn("get updates failed", zap.Error(err), zap.Duration("retry_in", backoff))
+			var wait time.Duration
+			var apiErr *APIError
+			if errors.As(err, &apiErr) && apiErr.Code == http.StatusConflict {
+				// При rolling-деплое старый контейнер ещё опрашивает Telegram.
+				// Это штатно и временно, поэтому пишем один раз, а не на
+				// каждый повтор.
+				if !inConflict {
+					p.log.Info("another bot instance is polling, waiting for it to stop")
+					inConflict = true
+				}
+				wait = conflictRetry
+			} else {
+				p.log.Warn("get updates failed", zap.Error(err), zap.Duration("retry_in", backoff))
+				wait = backoff
+				// Экспоненциальный откат не даёт залить Telegram запросами,
+				// пока он недоступен.
+				if backoff < 30*time.Second {
+					backoff *= 2
+				}
+			}
+
 			select {
 			case <-ctx.Done():
 				p.wg.Wait()
 				return nil
-			case <-time.After(backoff):
-			}
-			// Экспоненциальный откат не даёт залить Telegram запросами,
-			// пока он недоступен.
-			if backoff < 30*time.Second {
-				backoff *= 2
+			case <-time.After(wait):
 			}
 			continue
 		}
 		backoff = time.Second
+		if inConflict {
+			p.log.Info("polling resumed")
+			inConflict = false
+		}
 
 		for _, u := range updates {
 			if u.UpdateID >= offset {

@@ -40,6 +40,18 @@ type apiResponse struct {
 	ErrorCode   int             `json:"error_code"`
 }
 
+// APIError — отказ Bot API. Типизирован, чтобы вызывающий код различал
+// ошибки по коду через errors.As, а не по тексту.
+type APIError struct {
+	Method      string
+	Code        int
+	Description string
+}
+
+func (e *APIError) Error() string {
+	return fmt.Sprintf("telegram %s failed (%d): %s", e.Method, e.Code, e.Description)
+}
+
 func (a *API) call(ctx context.Context, method string, payload, out any) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -68,7 +80,7 @@ func (a *API) call(ctx context.Context, method string, payload, out any) error {
 		return fmt.Errorf("decode %s response: %w", method, err)
 	}
 	if !parsed.OK {
-		return fmt.Errorf("telegram %s failed (%d): %s", method, parsed.ErrorCode, parsed.Description)
+		return &APIError{Method: method, Code: parsed.ErrorCode, Description: parsed.Description}
 	}
 
 	if out != nil && len(parsed.Result) > 0 {
