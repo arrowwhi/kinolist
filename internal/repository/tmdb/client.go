@@ -4,6 +4,7 @@ package tmdb
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -125,6 +126,11 @@ func (c *Client) get(ctx context.Context, path string, params url.Values, out an
 
 	resp, err := c.http.Do(req)
 	if err != nil {
+		// v3-ключ едет в query, а url.Error печатает URL целиком.
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
+			err = urlErr.Err
+		}
 		return fmt.Errorf("%w: tmdb request failed: %w", movie.ErrProviderUnavailable, err)
 	}
 	defer func() { _ = resp.Body.Close() }()

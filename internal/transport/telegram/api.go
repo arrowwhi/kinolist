@@ -7,9 +7,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -66,6 +68,12 @@ func (a *API) call(ctx context.Context, method string, payload, out any) error {
 
 	resp, err := a.http.Do(req)
 	if err != nil {
+		// url.Error несёт полный URL, а в нём токен бота — наружу и в логи
+		// уходит только причина.
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
+			err = urlErr.Err
+		}
 		return fmt.Errorf("%s request failed: %w", method, err)
 	}
 	defer func() { _ = resp.Body.Close() }()

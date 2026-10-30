@@ -75,6 +75,53 @@ func TestParseInitDataAcceptsAGenuineSignature(t *testing.T) {
 	}
 }
 
+// Клиенты с Bot API 8.0 присылают signature; разные реализации то включают
+// его в строку для hash, то нет — валидными должны считаться оба варианта.
+func TestParseInitDataWithSignatureField(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+
+	tests := []struct {
+		name string
+		raw  func() string
+	}{
+		{
+			name: "signature included in hashed string",
+			raw: func() string {
+				values := validValues(now)
+				values.Set("signature", "c2lnbmF0dXJl")
+				return signInitData(t, values)
+			},
+		},
+		{
+			name: "signature excluded from hashed string",
+			raw: func() string {
+				signed, err := url.ParseQuery(signInitData(t, validValues(now)))
+				if err != nil {
+					t.Fatalf("parse signed values: %v", err)
+				}
+				signed.Set("signature", "c2lnbmF0dXJl")
+				return signed.Encode()
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			identity, err := middleware.ParseInitData(tt.raw(), secretKey(), now)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if identity.TelegramID != 777 {
+				t.Fatalf("telegram id = %d, want 777", identity.TelegramID)
+			}
+		})
+	}
+}
+
 func TestParseInitDataRejectsForgeries(t *testing.T) {
 	t.Parallel()
 
@@ -103,6 +150,16 @@ func TestParseInitDataRejectsForgeries(t *testing.T) {
 				mac.Write([]byte("auth_date=" + values.Get("auth_date")))
 				values.Set("hash", hex.EncodeToString(mac.Sum(nil)))
 				return values.Encode()
+			},
+			wantErr: middleware.ErrBadSignature,
+		},
+		{
+			name: "tampered signature field",
+			raw: func() string {
+				values := validValues(now)
+				values.Set("signature", "c2lnbmF0dXJl")
+				raw := signInitData(t, values)
+				return strings.Replace(raw, "c2lnbmF0dXJl", "Zm9yZ2Vk", 1)
 			},
 			wantErr: middleware.ErrBadSignature,
 		},
