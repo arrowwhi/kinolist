@@ -30,6 +30,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
       -X 'github.com/arrowwhi/kinolist/internal/app.buildTime=${BUILD_TIME}'" \
     -o /out/app ./cmd/app
 
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags "-s -w" -o /out/migrate ./cmd/migrate
+
 # --- финальный образ ---
 FROM alpine:3.22
 
@@ -39,8 +41,9 @@ RUN apk add --no-cache ca-certificates tzdata \
     && adduser -u 10001 -S -G app app
 
 COPY --from=build /out/app /usr/local/bin/app
+COPY --from=build /out/migrate /usr/local/bin/migrate
 
 USER app:app
 EXPOSE 8080
 
-ENTRYPOINT ["/usr/local/bin/app"]
+ENTRYPOINT ["/bin/sh", "-c", "/usr/local/bin/migrate && exec /usr/local/bin/app \"$@\"", "--"]
