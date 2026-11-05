@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Navigate } from '../shared/lib/navigation'
-const home = '/collection/want_to_watch'
+import { home, routeFromHash } from './route'
 export function useNavigation() {
-  const [location, setLocation] = useState(
-    () => window.location.hash.slice(1) || home,
+  const [location, setLocation] = useState(() =>
+    routeFromHash(window.location.hash),
   )
   useEffect(() => {
-    const update = () => setLocation(window.location.hash.slice(1) || home)
+    const update = () => setLocation(routeFromHash(window.location.hash))
     window.addEventListener('popstate', update)
     window.addEventListener('hashchange', update)
     return () => {
