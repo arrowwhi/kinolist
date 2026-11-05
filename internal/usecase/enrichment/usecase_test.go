@@ -377,7 +377,7 @@ func TestConfirm(t *testing.T) {
 
 		u, d := newUseCase(t, false)
 		d.primary.EXPECT().Provider().Return(movie.ProviderTMDB).AnyTimes()
-		d.primary.EXPECT().Details(gomock.Any(), int32(438631)).Return(movie.Candidate{}, movie.ErrProviderUnavailable).AnyTimes()
+		d.primary.EXPECT().Details(gomock.Any(), int32(438631), movie.MediaMovie).Return(movie.Candidate{}, movie.ErrProviderUnavailable).AnyTimes()
 
 		d.jobs.EXPECT().GetForUser(gomock.Any(), int64(7), int64(1)).Return(confirming, nil)
 		d.tx.EXPECT().BeginTransaction(gomock.Any()).DoAndReturn(
@@ -427,7 +427,7 @@ func TestConfirm(t *testing.T) {
 
 		u, d := newUseCase(t, false)
 		d.primary.EXPECT().Provider().Return(movie.ProviderTMDB).AnyTimes()
-		d.primary.EXPECT().Details(gomock.Any(), int32(438631)).Return(movie.Candidate{}, movie.ErrProviderUnavailable).AnyTimes()
+		d.primary.EXPECT().Details(gomock.Any(), int32(438631), movie.MediaMovie).Return(movie.Candidate{}, movie.ErrProviderUnavailable).AnyTimes()
 
 		d.jobs.EXPECT().GetForUser(gomock.Any(), int64(7), int64(1)).Return(confirming, nil)
 		d.tx.EXPECT().BeginTransaction(gomock.Any()).DoAndReturn(
@@ -452,7 +452,7 @@ func TestConfirm(t *testing.T) {
 
 		u, d := newUseCase(t, false)
 		d.primary.EXPECT().Provider().Return(movie.ProviderTMDB).AnyTimes()
-		d.primary.EXPECT().Details(gomock.Any(), int32(438631)).Return(movie.Candidate{}, movie.ErrProviderUnavailable).AnyTimes()
+		d.primary.EXPECT().Details(gomock.Any(), int32(438631), movie.MediaMovie).Return(movie.Candidate{}, movie.ErrProviderUnavailable).AnyTimes()
 
 		d.jobs.EXPECT().GetForUser(gomock.Any(), int64(7), int64(1)).Return(confirming, nil)
 		d.tx.EXPECT().BeginTransaction(gomock.Any()).DoAndReturn(
@@ -486,7 +486,7 @@ func TestConfirm(t *testing.T) {
 
 		u, d := newUseCase(t, false)
 		d.primary.EXPECT().Provider().Return(movie.ProviderTMDB).AnyTimes()
-		d.primary.EXPECT().Details(gomock.Any(), int32(438631)).Return(movie.Candidate{}, movie.ErrProviderUnavailable).AnyTimes()
+		d.primary.EXPECT().Details(gomock.Any(), int32(438631), movie.MediaMovie).Return(movie.Candidate{}, movie.ErrProviderUnavailable).AnyTimes()
 		d.jobs.EXPECT().GetForUser(gomock.Any(), int64(7), int64(1)).Return(confirming, nil)
 
 		_, err := u.Confirm(context.Background(), 7, 1, movie.ProviderTMDB, 999999)
@@ -500,7 +500,7 @@ func TestConfirm(t *testing.T) {
 
 		u, d := newUseCase(t, false)
 		d.primary.EXPECT().Provider().Return(movie.ProviderTMDB).AnyTimes()
-		d.primary.EXPECT().Details(gomock.Any(), int32(438631)).Return(movie.Candidate{}, movie.ErrProviderUnavailable).AnyTimes()
+		d.primary.EXPECT().Details(gomock.Any(), int32(438631), movie.MediaMovie).Return(movie.Candidate{}, movie.ErrProviderUnavailable).AnyTimes()
 		done := confirming
 		done.Status = domain.StatusDone
 		d.jobs.EXPECT().GetForUser(gomock.Any(), int64(7), int64(1)).Return(done, nil)

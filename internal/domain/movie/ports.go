@@ -6,14 +6,14 @@ import "context"
 type Repository interface {
 	// Upsert сохраняет карточку фильма и её жанры, возвращая запись с ID.
 	Upsert(ctx context.Context, m Movie) (Movie, error)
-	GetByTMDBID(ctx context.Context, tmdbID int32) (Movie, error)
+	GetByTMDBID(ctx context.Context, tmdbID int32, mediaTypes ...MediaType) (Movie, error)
 
 	Add(ctx context.Context, um UserMovie) (UserMovie, error)
 	Get(ctx context.Context, userID, userMovieID int64) (UserMovie, error)
 	List(ctx context.Context, f Filter) ([]UserMovie, error)
 	Count(ctx context.Context, f Filter) (int, error)
 	Summary(ctx context.Context, f Filter) (Summary, error)
-	CollectionGenres(ctx context.Context, userID int64) ([]GenreStats, error)
+	CollectionGenres(ctx context.Context, userID int64, mediaTypes ...MediaType) ([]GenreStats, error)
 	Update(ctx context.Context, userID, userMovieID int64, upd Update) (UserMovie, error)
 	Delete(ctx context.Context, userID, userMovieID int64) error
 
@@ -28,5 +28,5 @@ type Repository interface {
 type Catalog interface {
 	Provider() Provider
 	Search(ctx context.Context, title string, year int16) ([]Candidate, error)
-	Details(ctx context.Context, externalID int32) (Candidate, error)
+	Details(ctx context.Context, externalID int32, mediaTypes ...MediaType) (Candidate, error)
 }

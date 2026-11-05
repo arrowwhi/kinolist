@@ -13,6 +13,7 @@ export function useCollection(
   const summaryKey = JSON.stringify([
     status,
     filters.genreIds,
+    filters.mediaType,
     revision,
     fixedGenre,
   ])
@@ -31,6 +32,7 @@ export function useCollection(
   const key = JSON.stringify([
     status,
     filters.genreIds,
+    filters.mediaType,
     filters.sort,
     filters.order,
     query,
@@ -40,6 +42,7 @@ export function useCollection(
   ])
   const params = {
     status: status === 'all' ? undefined : status,
+    mediaType: filters.mediaType,
     genreIds: fixedGenre ? [fixedGenre] : filters.genreIds,
     query,
     sort: filters.sort,

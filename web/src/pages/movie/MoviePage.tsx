@@ -39,7 +39,7 @@ export function MoviePage({
   const watched = item?.status === 'watched'
   return (
     <Shell
-      title={item?.movie.title ?? 'Фильм'}
+      title={item?.movie.title ?? 'Карточка'}
       navigate={navigate}
       onBack={() => {
         if (!mutation.busy) back()
@@ -50,7 +50,7 @@ export function MoviePage({
       ) : error ? (
         <ErrorState message={error} onRetry={retry} />
       ) : !item ? (
-        <EmptyState title="Фильм не найден" />
+        <EmptyState title="Запись не найдена" />
       ) : (
         <>
           {item.movie.original_title &&
@@ -64,10 +64,9 @@ export function MoviePage({
             onGenre={(genre) => navigate(`/genres/${genre.id}`)}
           />
           <section className="stack stack--tight">
-            <h2>О фильме</h2>
+            <h2>{item.movie.media_type === 'tv' ? 'О сериале' : 'О фильме'}</h2>
             <p className="muted overview">
-              {item.movie.overview ||
-                'В каталоге пока нет описания этого фильма.'}
+              {item.movie.overview || 'В каталоге пока нет описания.'}
             </p>
           </section>
           <section className="stack stack--tight">
@@ -77,7 +76,7 @@ export function MoviePage({
               className="note-preview"
               onClick={() => navigate(`/movie/${id}/note`)}
             >
-              <span>{item.note || 'Например, кто посоветовал фильм'}</span>
+              <span>{item.note || 'Например, кто посоветовал посмотреть'}</span>
               <small>Изменить заметку</small>
             </button>
           </section>
@@ -117,7 +116,7 @@ export function MoviePage({
                 onClick={() =>
                   void mutation.execute(
                     () => api.updateMovie(id, { status: 'want_to_watch' }),
-                    () => changed('Фильм возвращён в «На потом»'),
+                    () => changed('Возвращено в «На потом»'),
                   )
                 }
               >
@@ -144,7 +143,11 @@ export function MoviePage({
           </div>
           {confirmDelete && (
             <ConfirmDialog
-              title="Удалить фильм?"
+              title={
+                item.movie.media_type === 'tv'
+                  ? 'Удалить сериал?'
+                  : 'Удалить фильм?'
+              }
               description={`«${item.movie.title}», заметка, оценка и отзыв будут удалены из твоей коллекции.`}
               busy={mutation.busy}
               onCancel={() => setConfirmDelete(false)}
@@ -152,7 +155,7 @@ export function MoviePage({
                 void mutation.execute(
                   () => api.deleteMovie(id),
                   () => {
-                    changed('Фильм удалён')
+                    changed('Удалено из коллекции')
                     navigate(
                       watched
                         ? '/collection/watched'

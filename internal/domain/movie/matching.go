@@ -93,10 +93,17 @@ func SelectMatch(query string, year int16, candidates []Candidate) Match {
 
 	switch {
 	case year > 0:
+		var exact []Candidate
 		for _, c := range byTitle {
 			if c.Year == year {
-				return Match{Kind: MatchExact, Best: c, Candidates: []Candidate{c}}
+				exact = append(exact, c)
 			}
+		}
+		if len(exact) == 1 {
+			return Match{Kind: MatchExact, Best: exact[0], Candidates: exact}
+		}
+		if len(exact) > 1 {
+			return Match{Kind: MatchAmbiguous, Candidates: topN(exact, MaxSuggestions)}
 		}
 	case len(byTitle) == 1:
 		return Match{Kind: MatchExact, Best: byTitle[0], Candidates: byTitle}

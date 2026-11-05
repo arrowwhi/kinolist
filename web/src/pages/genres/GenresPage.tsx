@@ -28,8 +28,8 @@ export function GenresPage({
       ) : !data?.items.length ? (
         <EmptyState
           title="Здесь будут твои жанры"
-          description="Добавь первый фильм — его жанры появятся здесь."
-          action="Добавить фильм"
+          description="Добавь фильм или сериал — его жанры появятся здесь."
+          action="Добавить в коллекцию"
           onAction={() => navigate('/add')}
         />
       ) : (

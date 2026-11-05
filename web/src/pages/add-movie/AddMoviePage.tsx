@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import type { UserMovie } from '../../api/types'
+import type { Candidate, UserMovie } from '../../api/types'
 import type { Navigate } from '../../shared/lib/navigation'
+import type { RecentCandidate } from '../../features/add-movie/useRecentCandidates'
 import { Shell } from '../../widgets/app-shell/Shell'
 import { useAddMovie } from '../../features/add-movie/useAddMovie'
 import { RatingForm } from '../../features/rating/RatingForm'
@@ -8,37 +9,63 @@ import { Button } from '../../shared/ui/Button'
 import { Field } from '../../shared/ui/Field'
 import { EmptyState, InlineError, SkeletonList } from '../../shared/ui/Feedback'
 import { MoviePreview } from '../../entities/movie/MoviePreview'
-import { Poster } from '../../entities/movie/Poster'
+import { CandidateCard } from '../../entities/movie/CandidateCard'
+import { candidateKey, movieMetadata } from '../../entities/movie/metadata'
 export function AddMoviePage({
   navigate,
   back,
   changed,
+  recent,
+  remember,
 }: {
   navigate: Navigate
   back: () => void
   changed: (message: string) => void
+  recent: RecentCandidate[]
+  remember: (input: string, candidates: Candidate[]) => void
 }) {
   const onAdded = (item: UserMovie) => {
-    changed(item.status === 'watched' ? 'Просмотр сохранён' : 'Фильм добавлен')
+    changed(
+      item.status === 'watched' ? 'Просмотр сохранён' : 'Добавлено в коллекцию',
+    )
     navigate(`/movie/${item.id}`, true)
   }
   const flow = useAddMovie(onAdded, (id) => {
-    changed('Фильм уже в коллекции')
+    changed('Уже в коллекции')
     navigate(`/movie/${id}`, true)
   })
   const [rating, setRating] = useState(false)
   const candidates =
     flow.job?.status === 'confirming' ? flow.job.candidates : []
   useEffect(() => {
-    if (candidates.length === 1 && !flow.candidate)
-      void flow.select(candidates[0])
-  }, [flow.job?.id, flow.job?.status, candidates.length])
+    if (!candidates.length) return
+    remember(flow.job?.query_title || flow.input, candidates)
+    const preferred = flow.preferredCandidate
+    const chosen = preferred
+      ? candidates.find((c) => candidateKey(c) === candidateKey(preferred))
+      : candidates.length === 1
+        ? candidates[0]
+        : null
+    if (chosen && !flow.candidate) void flow.select(chosen)
+    // A new job owns a fresh candidate set. Don't reselect after manual Back.
+  }, [flow.job?.id, flow.job?.status, candidates.length, remember])
+  useEffect(() => {
+    if (flow.movie && flow.candidate)
+      remember(flow.job?.query_title || flow.input, [
+        { ...flow.candidate, ...flow.movie },
+      ])
+  }, [flow.movie, remember])
   const waiting =
     !!flow.job && ['pending', 'processing'].includes(flow.job.status)
+  const tv = (flow.movie?.media_type ?? flow.candidate?.media_type) === 'tv'
   async function goBack() {
     if (flow.busy) return
     if (rating) {
       setRating(false)
+      return
+    }
+    if (flow.candidate && candidates.length > 1) {
+      flow.clearSelection()
       return
     }
     if (flow.job) {
@@ -58,78 +85,104 @@ export function AddMoviePage({
     <Shell
       title={
         rating
-          ? 'Как тебе фильм?'
+          ? tv
+            ? 'Как тебе сериал?'
+            : 'Как тебе фильм?'
           : flow.candidate
-            ? 'Это тот фильм?'
-            : flow.job
+            ? tv
+              ? 'Это тот сериал?'
+              : 'Это тот фильм?'
+            : waiting
               ? 'Ищем твоё кино'
-              : 'Добавить фильм'
+              : 'Добавить в коллекцию'
       }
       navigate={navigate}
       onBack={() => void goBack()}
     >
       {rating && flow.movie ? (
         <RatingForm
-          title={[flow.movie.title, flow.movie.year]
-            .filter(Boolean)
-            .join(' · ')}
+          title={`${flow.movie.title} · ${movieMetadata(flow.movie)}`}
           busy={flow.busy}
           error={flow.error}
           onSave={(value, review) =>
             void flow.confirm({ status: 'watched', user_rating: value, review })
           }
         />
-      ) : !flow.job ? (
-        <form
-          className="stack add-form"
-          onSubmit={(e) => {
-            e.preventDefault()
-            void flow.search()
-          }}
-        >
-          <p className="muted">
-            Увидел интересное? Сохрани сейчас,
-            <br />
-            посмотри, когда захочется.
-          </p>
-          <Field
-            label="Название или ссылка"
-            placeholder="Например, «Идеальные дни»"
-            value={flow.input}
-            onChange={(e) => flow.setInput(e.target.value)}
-            disabled={flow.busy}
-            required
-            maxLength={2000}
-            autoComplete="off"
-          />
-          <Button
-            variant="secondary"
-            onClick={() => void paste()}
-            disabled={flow.busy}
+      ) : !flow.job || (candidates.length > 0 && !flow.candidate) ? (
+        <>
+          <form
+            className="stack add-form"
+            onSubmit={(e) => {
+              e.preventDefault()
+              void flow.search()
+            }}
           >
-            Вставить из буфера
-          </Button>
-          <p className="muted small">
-            Подойдёт и ссылка на Instagram Reels — мы попробуем узнать фильм.
-          </p>
-          <aside className="tip">
-            <h2>Можно просто отправить боту</h2>
             <p className="muted">
-              Перешли рилс или напиши название в чате. Коллекция всегда под
-              рукой.
+              Увидел интересное? Сохрани сейчас,
+              <br />
+              посмотри, когда захочется.
             </p>
-          </aside>
-          <InlineError message={flow.error} />
-          <div className="form-actions">
+            <Field
+              label="Название или ссылка"
+              placeholder="Например, «Идеальные дни»"
+              value={flow.input}
+              onChange={(e) => flow.setInput(e.target.value)}
+              disabled={flow.busy}
+              required
+              maxLength={2000}
+              autoComplete="off"
+            />
+            <Button
+              variant="secondary"
+              onClick={() => void paste()}
+              disabled={flow.busy}
+            >
+              Вставить ссылку
+            </Button>
+            <p className="muted small">
+              Введи название фильма или сериала. Можно прислать ссылку на
+              Instagram Reels.
+            </p>
+            <InlineError message={flow.error} />
             <Button
               type="submit"
               disabled={!flow.input.trim()}
               busy={flow.busy}
             >
-              Найти фильм
+              Найти
             </Button>
-          </div>
-        </form>
+          </form>
+          {candidates.length ? (
+            <section className="stack" aria-label="Результаты поиска">
+              <h2>Результаты поиска</h2>
+              <p className="muted small">
+                По запросу «{flow.job?.query_title || flow.input}»
+              </p>
+              {candidates.map((c) => (
+                <CandidateCard
+                  key={candidateKey(c)}
+                  candidate={c}
+                  disabled={flow.busy}
+                  onSelect={() => void flow.select(c)}
+                />
+              ))}
+            </section>
+          ) : recent.length > 0 ? (
+            <section className="stack" aria-label="Недавние результаты">
+              <h2>Недавние результаты</h2>
+              {recent.slice(0, 3).map((entry) => (
+                <CandidateCard
+                  key={candidateKey(entry.candidate)}
+                  candidate={entry.candidate}
+                  disabled={flow.busy}
+                  onSelect={() =>
+                    void flow.search(entry.input, entry.candidate)
+                  }
+                />
+              ))}
+            </section>
+          ) : null}
+        </>
       ) : flow.candidate ? (
         <>
           <p className="muted">
@@ -138,15 +191,11 @@ export function AddMoviePage({
           {flow.busy && !flow.movie ? (
             <SkeletonList />
           ) : flow.movie ? (
-            <>
-              <MoviePreview movie={flow.movie} />
-            </>
+            <MoviePreview movie={flow.movie} />
           ) : null}
           <InlineError message={flow.error} />
           {flow.existingId ? (
-            <Button onClick={flow.openExisting}>
-              Открыть фильм в коллекции
-            </Button>
+            <Button onClick={flow.openExisting}>Открыть в коллекции</Button>
           ) : flow.movie ? (
             <div className="stack">
               <Button busy={flow.busy} onClick={() => void flow.confirm()}>
@@ -174,7 +223,9 @@ export function AddMoviePage({
           >
             {candidates.length > 1
               ? 'Выбрать другой вариант'
-              : 'Не тот фильм? Уточнить название →'}
+              : tv
+                ? 'Не тот сериал? Уточнить название →'
+                : 'Не тот фильм? Уточнить название →'}
           </Button>
         </>
       ) : waiting ? (
@@ -183,8 +234,8 @@ export function AddMoviePage({
             <span className="spinner spinner--large" />
             <h2>
               {flow.job.kind === 'reel'
-                ? 'Распознаём фильм из рилса'
-                : 'Ищем фильм в каталоге'}
+                ? 'Распознаём название из рилса'
+                : 'Ищем фильмы и сериалы'}
             </h2>
             <p className="muted">Обычно это занимает несколько секунд.</p>
           </div>
@@ -200,45 +251,9 @@ export function AddMoviePage({
             Отменить поиск
           </Button>
         </div>
-      ) : candidates.length ? (
-        <>
-          <p className="muted">
-            Нашли несколько вариантов. Выбери нужный фильм.
-          </p>
-          <div className="stack">
-            {candidates.map((c) => (
-              <button
-                type="button"
-                className="candidate-card"
-                key={`${c.provider}:${c.external_id}`}
-                onClick={() => void flow.select(c)}
-              >
-                <Poster title={c.title} url={c.poster_url} />
-                <span>
-                  <strong>{c.title}</strong>
-                  <span className="muted small">
-                    {c.year || ''}
-                    {c.rating ? ` · ${c.rating.toFixed(1)}` : ''}
-                  </span>
-                  <span className="candidate-card__overview muted">
-                    {c.overview}
-                  </span>
-                </span>
-              </button>
-            ))}
-          </div>
-          <InlineError message={flow.error} />
-          <Button
-            variant="secondary"
-            busy={flow.busy}
-            onClick={() => void flow.reset()}
-          >
-            Нет нужного — уточнить название
-          </Button>
-        </>
       ) : (
         <EmptyState
-          title="Фильм не найден"
+          title="Ничего не найдено"
           description={
             flow.error || 'Попробуй уточнить название или год выхода.'
           }

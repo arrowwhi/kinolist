@@ -28,7 +28,7 @@ export function RatingForm({
     'Могло быть лучше',
     'На один раз',
     'Неплохо',
-    'Хороший фильм',
+    'Понравилось',
     'Очень хороший',
     'Очень понравился',
     'Один из любимых',
@@ -54,7 +54,7 @@ export function RatingForm({
       <div
         className="rating-scale"
         role="radiogroup"
-        aria-label="Оценка фильма от 1 до 10"
+        aria-label="Оценка от 1 до 10"
         onKeyDown={(e) => {
           if (
             busy ||

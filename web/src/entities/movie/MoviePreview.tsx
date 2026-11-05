@@ -1,5 +1,6 @@
 import type { Movie } from '../../api/types'
 import { formatRuntime } from '../../shared/lib/format'
+import { movieMetadata } from './metadata'
 import { Poster } from './Poster'
 import { Rating } from './Rating'
 export function MoviePreview({ movie }: { movie: Movie }) {
@@ -13,9 +14,8 @@ export function MoviePreview({ movie }: { movie: Movie }) {
       <h2 className="preview-title">{movie.title}</h2>
       <p className="muted small">
         {[
-          movie.original_title !== movie.title ? movie.original_title : '',
-          movie.year,
-          formatRuntime(movie.runtime_min),
+          movieMetadata(movie),
+          movie.media_type === 'tv' ? '' : formatRuntime(movie.runtime_min),
         ]
           .filter(Boolean)
           .join(' · ')}

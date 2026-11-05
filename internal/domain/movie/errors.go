@@ -3,6 +3,7 @@ package movie
 import "errors"
 
 var (
+	ErrInvalidMediaType    = errors.New("invalid media type")
 	ErrReviewTooLong       = errors.New("review exceeds 5000 characters")
 	ErrNotFound            = errors.New("movie not found")
 	ErrAlreadyInCollection = errors.New("movie already in collection")

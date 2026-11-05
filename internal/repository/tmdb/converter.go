@@ -20,20 +20,30 @@ type searchResponse struct {
 }
 
 type result struct {
-	ID            int32   `json:"id"`
-	Title         string  `json:"title"`
-	OriginalTitle string  `json:"original_title"`
-	Overview      string  `json:"overview"`
-	PosterPath    string  `json:"poster_path"`
-	ReleaseDate   string  `json:"release_date"`
-	Popularity    float32 `json:"popularity"`
-	VoteCount     *int32  `json:"vote_count"`
-	VoteAverage   float32 `json:"vote_average"`
-	GenreIDs      []int32 `json:"genre_ids"`
+	MediaType     movie.MediaType `json:"media_type"`
+	Name          string          `json:"name"`
+	OriginalName  string          `json:"original_name"`
+	FirstAirDate  string          `json:"first_air_date"`
+	ID            int32           `json:"id"`
+	Title         string          `json:"title"`
+	OriginalTitle string          `json:"original_title"`
+	Overview      string          `json:"overview"`
+	PosterPath    string          `json:"poster_path"`
+	ReleaseDate   string          `json:"release_date"`
+	Popularity    float32         `json:"popularity"`
+	VoteCount     *int32          `json:"vote_count"`
+	VoteAverage   float32         `json:"vote_average"`
+	GenreIDs      []int32         `json:"genre_ids"`
 }
 
 func (r result) toCandidate() movie.Candidate {
+	if r.MediaType == movie.MediaTV {
+		r.Title = r.Name
+		r.OriginalTitle = r.OriginalName
+		r.ReleaseDate = r.FirstAirDate
+	}
 	return movie.Candidate{
+		MediaType:      r.MediaType.Normalize(),
 		Provider:       movie.ProviderTMDB,
 		ExternalID:     r.ID,
 		Title:          r.Title,
@@ -50,8 +60,12 @@ func (r result) toCandidate() movie.Candidate {
 
 type detailsResponse struct {
 	result
-	Runtime int16 `json:"runtime"`
-	Genres  []struct {
+	Runtime         int16  `json:"runtime"`
+	NumberOfSeasons *int16 `json:"number_of_seasons"`
+	Seasons         []struct {
+		Number int16 `json:"season_number"`
+	} `json:"seasons"`
+	Genres []struct {
 		ID   int32  `json:"id"`
 		Name string `json:"name"`
 	} `json:"genres"`
@@ -59,7 +73,26 @@ type detailsResponse struct {
 
 func (d detailsResponse) toCandidate() movie.Candidate {
 	c := d.result.toCandidate()
-	c.RuntimeMin = d.Runtime
+	if c.MediaType == movie.MediaTV {
+		// Season zero contains specials, not an ordinary season.
+		if len(d.Seasons) > 0 {
+			count := int16(0)
+			seen := map[int16]bool{}
+			for _, s := range d.Seasons {
+				if s.Number > 0 && !seen[s.Number] {
+					count++
+					seen[s.Number] = true
+				}
+			}
+			if count > 0 {
+				c.SeasonCount = &count
+			}
+		} else if d.NumberOfSeasons != nil && *d.NumberOfSeasons > 0 {
+			c.SeasonCount = d.NumberOfSeasons
+		}
+	} else {
+		c.RuntimeMin = d.Runtime
+	}
 
 	ids := make([]int32, 0, len(d.Genres))
 	names := make([]string, 0, len(d.Genres))

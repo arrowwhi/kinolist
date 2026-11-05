@@ -6,16 +6,17 @@ import type {
   Job,
   Movie,
   MovieList,
+  MediaType,
   Status,
   UserMovie,
 } from './types'
 export class RequestError extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-    readonly existingUserMovieId?: number,
-  ) {
+  readonly code: string
+  readonly existingUserMovieId?: number
+  constructor(code: string, message: string, existingUserMovieId?: number) {
     super(message)
+    this.code = code
+    this.existingUserMovieId = existingUserMovieId
   }
 }
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -38,6 +39,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return body as T
 }
 export interface ListParams {
+  mediaType?: MediaType
   status?: Status
   genreIds?: number[]
   query?: string
@@ -53,6 +55,7 @@ export const api = {
   ): Promise<MovieList> {
     const search = new URLSearchParams()
     if (params.status) search.set('status', params.status)
+    if (params.mediaType) search.set('media_type', params.mediaType)
     if (params.genreIds?.length)
       search.set('genre_ids', params.genreIds.join(','))
     if (params.query) search.set('q', params.query)
@@ -65,8 +68,10 @@ export const api = {
   genres(signal?: AbortSignal) {
     return request<{ items: Genre[] }>('/genres', { signal })
   },
-  collectionGenres(signal?: AbortSignal) {
-    return request<{ items: GenreStats[] }>('/genres?scope=collection', {
+  collectionGenres(signal?: AbortSignal, mediaType?: MediaType) {
+    const query = new URLSearchParams({ scope: 'collection' })
+    if (mediaType) query.set('media_type', mediaType)
+    return request<{ items: GenreStats[] }>(`/genres?${query}`, {
       signal,
     })
   },
@@ -101,11 +106,11 @@ export const api = {
   },
   candidateDetails(
     id: number,
-    candidate: Pick<Candidate, 'provider' | 'external_id'>,
+    candidate: Pick<Candidate, 'provider' | 'external_id' | 'media_type'>,
     signal?: AbortSignal,
   ) {
     return request<Movie>(
-      `/jobs/${id}/candidates/${encodeURIComponent(candidate.provider)}/${candidate.external_id}`,
+      `/jobs/${id}/candidates/${encodeURIComponent(candidate.provider)}/${candidate.media_type ?? 'movie'}/${candidate.external_id}`,
       { signal },
     )
   },

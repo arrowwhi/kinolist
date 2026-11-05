@@ -15,6 +15,8 @@ type Genre struct {
 }
 
 type Movie struct {
+	MediaType       string  `json:"media_type"`
+	SeasonCount     *int16  `json:"season_count"`
 	ID              int64   `json:"id"`
 	TMDBID          int32   `json:"tmdb_id,omitempty"`
 	KinopoiskID     int32   `json:"kinopoisk_id,omitempty"`
@@ -69,6 +71,8 @@ type CreateJobRequest struct {
 }
 
 type Candidate struct {
+	MediaType       string  `json:"media_type"`
+	SeasonCount     *int16  `json:"season_count"`
 	OriginalTitle   string  `json:"original_title,omitempty"`
 	RuntimeMin      int16   `json:"runtime_min,omitempty"`
 	RatingProvider  string  `json:"rating_provider,omitempty"`
@@ -95,6 +99,7 @@ type Job struct {
 }
 
 type ConfirmJobRequest struct {
+	MediaType  string `json:"media_type,omitempty"`
 	Status     string `json:"status,omitempty"`
 	UserRating int16  `json:"user_rating,omitempty"`
 	Note       string `json:"note,omitempty"`

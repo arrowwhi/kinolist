@@ -18,7 +18,7 @@ type (
 		List(ctx context.Context, f movie.Filter) ([]movie.UserMovie, error)
 		Count(ctx context.Context, f movie.Filter) (int, error)
 		Summary(ctx context.Context, f movie.Filter) (movie.Summary, error)
-		CollectionGenres(ctx context.Context, userID int64) ([]movie.GenreStats, error)
+		CollectionGenres(ctx context.Context, userID int64, mediaTypes ...movie.MediaType) ([]movie.GenreStats, error)
 		Update(ctx context.Context, userID, userMovieID int64, upd movie.Update) (movie.UserMovie, error)
 		Delete(ctx context.Context, userID, userMovieID int64) error
 		ListGenres(ctx context.Context) ([]movie.Genre, error)
@@ -49,6 +49,9 @@ type Page struct {
 }
 
 func (uc *UseCase) List(ctx context.Context, f movie.Filter) (Page, error) {
+	if f.MediaType != "" && !f.MediaType.Valid() {
+		return Page{}, movie.ErrInvalidMediaType
+	}
 	f = f.Normalize()
 
 	if f.Status != "" && !f.Status.Valid() {
@@ -144,6 +147,9 @@ func validateUpdate(upd movie.Update) error {
 	return nil
 }
 
-func (uc *UseCase) CollectionGenres(ctx context.Context, userID int64) ([]movie.GenreStats, error) {
-	return uc.movies.CollectionGenres(ctx, userID)
+func (uc *UseCase) CollectionGenres(ctx context.Context, userID int64, mediaTypes ...movie.MediaType) ([]movie.GenreStats, error) {
+	if len(mediaTypes) > 0 && mediaTypes[0] != "" && !mediaTypes[0].Valid() {
+		return nil, movie.ErrInvalidMediaType
+	}
+	return uc.movies.CollectionGenres(ctx, userID, mediaTypes...)
 }

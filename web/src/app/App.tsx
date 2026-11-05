@@ -14,9 +14,11 @@ import { MoviePage } from '../pages/movie/MoviePage'
 import { NotePage } from '../pages/movie/NotePage'
 import { RatePage } from '../pages/movie/RatePage'
 import { AddMoviePage } from '../pages/add-movie/AddMoviePage'
+import { useRecentCandidates } from '../features/add-movie/useRecentCandidates'
 import { defaultFilters } from '../features/collection/model'
 export function App() {
   const { location, navigate, back } = useNavigation()
+  const history = useRecentCandidates()
   const [revision, setRevision] = useState(0)
   const [toast, setToast] = useState('')
   const timer = useRef<number | undefined>(undefined)
@@ -32,10 +34,6 @@ export function App() {
   ].includes(path)
   useTelegramSetup(back, !topLevel)
   const catalog = useResource((signal) => api.genres(signal), 'genres')
-  const genreStats = useResource(
-    (signal) => api.collectionGenres(signal),
-    revision,
-  )
   const changed = useCallback((message: string) => {
     setRevision((value) => value + 1)
     setToast(message)
@@ -57,7 +55,15 @@ export function App() {
         <MoviePage {...props} revision={revision} />
       )
   } else if (path === '/add')
-    content = <AddMoviePage navigate={navigate} back={back} changed={changed} />
+    content = (
+      <AddMoviePage
+        navigate={navigate}
+        back={back}
+        changed={changed}
+        recent={history.recent}
+        remember={history.remember}
+      />
+    )
   else if (path === '/genres')
     content = <GenresPage navigate={navigate} revision={revision} />
   else if (path === '/filters') {
@@ -137,7 +143,6 @@ export function App() {
           status={status}
           genre={genre}
           genres={catalog.data?.items ?? []}
-          genreStats={genreStats.data?.items ?? []}
           preferences={
             preferences[key] ?? { filters: defaultFilters(status), search: '' }
           }
@@ -153,7 +158,7 @@ export function App() {
     content = (
       <Shell title="Страница не найдена" navigate={navigate} onBack={back}>
         <ErrorState
-          message="Вернись к своей коллекции фильмов."
+          message="Вернись к своей коллекции."
           onRetry={() => navigate('/collection/want_to_watch', true)}
         />
       </Shell>

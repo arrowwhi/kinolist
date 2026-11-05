@@ -25,7 +25,7 @@ func TestCandidateDetailsScopedAndCachedForConfirm(t *testing.T) {
 	chosen.RatingProvider = movie.ProviderTMDB
 	chosen.RatingVoteCount = &votes
 	d.primary.EXPECT().Provider().Return(movie.ProviderTMDB)
-	d.primary.EXPECT().Details(gomock.Any(), int32(123)).Return(chosen, nil)
+	d.primary.EXPECT().Details(gomock.Any(), int32(123), movie.MediaMovie).Return(chosen, nil)
 	d.movies.EXPECT().GenresByTMDBIDs(gomock.Any(), []int32{18}).Return([]movie.Genre{{ID: 18}}, nil).Times(2)
 	got, err := u.CandidateDetails(context.Background(), 7, 1, movie.ProviderTMDB, 123)
 	if err != nil {

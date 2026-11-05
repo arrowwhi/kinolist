@@ -23,15 +23,15 @@ func startText(firstName string) string {
 		greeting = "Привет, " + html.EscapeString(name)
 	}
 
-	return greeting + "! Я сохраняю фильмы, которые вы находите в рилсах.\n\n" +
+	return greeting + "! Я сохраняю фильмы и сериалы, которые вы находите в рилсах.\n\n" +
 		"• Пришлите ссылку на рилс — я попробую распознать фильм\n" +
 		"• Или просто напишите название\n\n" +
 		"Вся коллекция с жанрами и описаниями — в мини-приложении."
 }
 
 const helpText = "Что я умею:\n\n" +
-	"• <b>Ссылка на рилс</b> — распознаю название и найду фильм\n" +
-	"• <b>Название текстом</b> — найду фильм напрямую\n" +
+	"• <b>Ссылка на рилс</b> — распознаю название и найду фильм или сериал\n" +
+	"• <b>Название текстом</b> — найду фильм или сериал напрямую\n" +
 	"• <b>/collection</b> — открыть коллекцию\n" +
 	"• <b>/help</b> — эта справка\n\n" +
 	"Если название в рилсе вшито в видео, я могу его не увидеть — тогда просто напишите название текстом."
@@ -49,11 +49,15 @@ func candidateCaption(c movie.Candidate, header string) string {
 		title = c.OriginalTitle
 	}
 	b.WriteString("<b>" + html.EscapeString(title) + "</b>")
+	b.WriteString(" · " + c.MediaType.Label())
 	if c.Year > 0 {
 		fmt.Fprintf(&b, " (%d)", c.Year)
 	}
 	if c.OriginalTitle != "" && c.OriginalTitle != c.Title {
 		b.WriteString("\n<i>" + html.EscapeString(c.OriginalTitle) + "</i>")
+	}
+	if c.MediaType == movie.MediaTV && c.SeasonCount != nil {
+		fmt.Fprintf(&b, "\nСезонов: %d", *c.SeasonCount)
 	}
 	if c.Rating > 0 {
 		fmt.Fprintf(&b, "\n⭐ %.1f", c.Rating)
@@ -74,7 +78,7 @@ func choiceText(candidates []movie.Candidate) string {
 		if title == "" {
 			title = c.OriginalTitle
 		}
-		fmt.Fprintf(&b, "\n<b>%d.</b> %s", i+1, html.EscapeString(title))
+		fmt.Fprintf(&b, "\n<b>%d.</b> %s", i+1, html.EscapeString(title)+" · "+c.MediaType.Label())
 		if c.Year > 0 {
 			fmt.Fprintf(&b, " (%d)", c.Year)
 		}
@@ -92,7 +96,10 @@ func addedText(um movie.UserMovie) string {
 	if um.Movie.Year > 0 {
 		fmt.Fprintf(&b, " (%d)", um.Movie.Year)
 	}
-	b.WriteString(" добавлен в коллекцию.")
+	b.WriteString(" добавлен в коллекцию.\n" + um.Movie.MediaType.Label())
+	if um.Movie.MediaType == movie.MediaTV && um.Movie.SeasonCount != nil {
+		fmt.Fprintf(&b, " · сезонов: %d", *um.Movie.SeasonCount)
+	}
 
 	if len(um.Movie.Genres) > 0 {
 		names := make([]string, 0, len(um.Movie.Genres))

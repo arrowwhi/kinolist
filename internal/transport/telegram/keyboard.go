@@ -25,12 +25,16 @@ type callback struct {
 	JobID      int64
 	Provider   movie.Provider
 	ExternalID int32
+	MediaType  movie.MediaType
 }
 
 func (c callback) encode() string {
 	parts := []string{c.Action, strconv.FormatInt(c.JobID, 10)}
 	if c.Provider != "" {
 		parts = append(parts, providerCode(c.Provider), strconv.Itoa(int(c.ExternalID)))
+	}
+	if c.Provider != "" && c.MediaType != "" {
+		parts = append(parts, string(c.MediaType))
 	}
 	return strings.Join(parts, callbackSeparator)
 }
@@ -57,6 +61,15 @@ func parseCallback(data string) (callback, error) {
 		c.ExternalID = int32(externalID) //nolint:gosec // id кандидата из TMDB/КП не выходит за диапазон int32
 	}
 
+	if len(parts) > 5 {
+		return callback{}, fmt.Errorf("too many callback fields")
+	}
+	if len(parts) == 5 {
+		c.MediaType = movie.MediaType(parts[4])
+		if !c.MediaType.Valid() {
+			return callback{}, movie.ErrInvalidMediaType
+		}
+	}
 	return c, nil
 }
 
@@ -81,11 +94,11 @@ func confirmKeyboard(jobID int64, c movie.Candidate) *InlineKeyboardMarkup {
 	return &InlineKeyboardMarkup{InlineKeyboard: [][]InlineKeyboardButton{
 		{
 			{Text: "✅ Да, добавить", CallbackData: callback{
-				Action: actionConfirm, JobID: jobID, Provider: c.Provider, ExternalID: c.ExternalID,
+				Action: actionConfirm, JobID: jobID, Provider: c.Provider, ExternalID: c.ExternalID, MediaType: c.MediaType.Normalize(),
 			}.encode()},
 		},
 		{
-			{Text: "🔍 Это другой фильм", CallbackData: callback{Action: actionOther, JobID: jobID}.encode()},
+			{Text: "🔍 Это другой результат", CallbackData: callback{Action: actionOther, JobID: jobID}.encode()},
 		},
 		{
 			{Text: "✖️ Отмена", CallbackData: callback{Action: actionReject, JobID: jobID}.encode()},
@@ -98,7 +111,7 @@ func choiceKeyboard(jobID int64, candidates []movie.Candidate) *InlineKeyboardMa
 	rows := make([][]InlineKeyboardButton, 0, len(candidates)+1)
 
 	for i, c := range candidates {
-		data := callback{Action: actionPick, JobID: jobID, Provider: c.Provider, ExternalID: c.ExternalID}.encode()
+		data := callback{Action: actionPick, JobID: jobID, Provider: c.Provider, ExternalID: c.ExternalID, MediaType: c.MediaType.Normalize()}.encode()
 		if len(data) > maxCallbackBytes {
 			continue
 		}
@@ -128,9 +141,9 @@ func openAppKeyboard(webAppURL string) *InlineKeyboardMarkup {
 const maxButtonLabel = 40
 
 func shortLabel(c movie.Candidate) string {
-	title := c.Title
-	if title == "" {
-		title = c.OriginalTitle
+	title := c.MediaType.Label() + " · " + c.Title
+	if c.Title == "" {
+		title = c.MediaType.Label() + " · " + c.OriginalTitle
 	}
 	if c.Year > 0 {
 		title = fmt.Sprintf("%s (%d)", title, c.Year)

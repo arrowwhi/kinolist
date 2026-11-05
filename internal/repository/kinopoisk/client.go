@@ -49,7 +49,9 @@ func (c *Client) Search(ctx context.Context, title string, year int16) ([]movie.
 
 	candidates := make([]movie.Candidate, 0, len(resp.Films))
 	for _, f := range resp.Films {
-		candidates = append(candidates, f.toCandidate())
+		if v := f.toCandidate(); v.MediaType.Valid() {
+			candidates = append(candidates, v)
+		}
 	}
 
 	// API не умеет фильтровать по году, поэтому сужаем выдачу сами —
@@ -69,7 +71,7 @@ func (c *Client) Search(ctx context.Context, title string, year int16) ([]movie.
 	return candidates, nil
 }
 
-func (c *Client) Details(ctx context.Context, externalID int32) (movie.Candidate, error) {
+func (c *Client) Details(ctx context.Context, externalID int32, mediaTypes ...movie.MediaType) (movie.Candidate, error) {
 	var resp filmDetails
 	if err := c.get(ctx, "/api/v2.2/films/"+strconv.Itoa(int(externalID)), nil, &resp); err != nil {
 		return movie.Candidate{}, err
@@ -78,7 +80,35 @@ func (c *Client) Details(ctx context.Context, externalID int32) (movie.Candidate
 		return movie.Candidate{}, movie.ErrNotFound
 	}
 
-	return resp.toCandidate(), nil
+	d := resp.toCandidate()
+	if !d.MediaType.Valid() {
+		return movie.Candidate{}, movie.ErrNotFound
+	}
+	if len(mediaTypes) > 0 && d.MediaType != mediaTypes[0] {
+		return movie.Candidate{}, movie.ErrNotFound
+	}
+	if d.MediaType == movie.MediaTV {
+		d.RuntimeMin = 0
+		var seasons struct {
+			Items []struct {
+				Number int16 `json:"number"`
+			} `json:"items"`
+		}
+		if err := c.get(ctx, "/api/v2.2/films/"+strconv.Itoa(int(externalID))+"/seasons", nil, &seasons); err == nil {
+			count := int16(0)
+			seen := map[int16]bool{}
+			for _, s := range seasons.Items {
+				if s.Number > 0 && !seen[s.Number] {
+					count++
+					seen[s.Number] = true
+				}
+			}
+			if count > 0 {
+				d.SeasonCount = &count
+			}
+		}
+	}
+	return d, nil
 }
 
 func (c *Client) get(ctx context.Context, path string, params url.Values, out any) error {

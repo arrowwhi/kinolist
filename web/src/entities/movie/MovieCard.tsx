@@ -2,6 +2,7 @@ import type { UserMovie } from '../../api/types'
 import { formatDate } from '../../shared/lib/format'
 import { Poster } from './Poster'
 import { Rating } from './Rating'
+import { movieMetadata } from './metadata'
 export function MovieCard({
   item,
   onOpen,
@@ -21,11 +22,13 @@ export function MovieCard({
         <span className="movie-card__title">{item.movie.title}</span>
         <span className="movie-card__meta">
           {[
-            item.movie.year,
-            item.movie.genres
-              .map((g) => g.name_ru)
-              .slice(0, 2)
-              .join(', '),
+            movieMetadata(item.movie),
+            item.movie.media_type === 'tv'
+              ? ''
+              : item.movie.genres
+                  .slice(0, 2)
+                  .map((g) => g.name_ru)
+                  .join(', '),
           ]
             .filter(Boolean)
             .join(' · ')}

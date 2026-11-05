@@ -1,3 +1,4 @@
+export type MediaType = 'movie' | 'tv'
 export type Status = 'want_to_watch' | 'watched'
 
 export interface Genre {
@@ -7,6 +8,8 @@ export interface Genre {
 }
 
 export interface Movie {
+  media_type?: MediaType
+  season_count?: number | null
   id: number
   tmdb_id?: number
   kinopoisk_id?: number
@@ -48,6 +51,8 @@ export interface MovieList {
 }
 
 export interface Candidate {
+  media_type?: MediaType
+  season_count?: number | null
   original_title?: string
   runtime_min?: number
   genres: Genre[]
@@ -81,6 +86,7 @@ export interface GenreStats extends Genre {
   watched_count: number
 }
 export interface ConfirmOptions {
+  media_type?: MediaType
   status?: Status
   user_rating?: number
   note?: string

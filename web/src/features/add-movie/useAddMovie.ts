@@ -14,6 +14,8 @@ export function useAddMovie(
   onExisting: (id: number) => void,
 ) {
   const [input, setInput] = useState('')
+  const [preferredCandidate, setPreferredCandidate] =
+    useState<Candidate | null>(null)
   const [job, setJob] = useState<Job | null>(null)
   const [candidate, setCandidate] = useState<Candidate | null>(null)
   const [movie, setMovie] = useState<Movie | null>(null)
@@ -77,14 +79,24 @@ export function useAddMovie(
       window.clearTimeout(timer)
     }
   }, [job?.id, job?.status, pollAttempt])
-  async function search() {
-    if (!input.trim() || lock.current) return
+  async function search(inputOverride?: string, preferred?: Candidate) {
+    const query = (inputOverride ?? input).trim()
+    if (!query || lock.current) return
     lock.current = true
     setBusy(true)
     setError(null)
     setExistingId(null)
     try {
-      const created = await api.createJob(input.trim())
+      if (job && ['pending', 'processing', 'confirming'].includes(job.status))
+        await api.rejectJob(job.id)
+      if (!alive.current) return
+      selection.current++
+      setJob(null)
+      setCandidate(null)
+      setMovie(null)
+      setInput(query)
+      setPreferredCandidate(preferred ?? null)
+      const created = await api.createJob(query)
       if (alive.current) setJob(created)
     } catch (err) {
       if (alive.current) setError(errorMessage(err))
@@ -96,6 +108,7 @@ export function useAddMovie(
   async function select(value: Candidate) {
     if (!job || lock.current) return
     const version = ++selection.current
+    setExistingId(null)
     setCandidate(value)
     setMovie(null)
     setBusy(true)
@@ -120,7 +133,7 @@ export function useAddMovie(
         job.id,
         candidate.provider,
         candidate.external_id,
-        options,
+        { ...options, media_type: candidate.media_type ?? 'movie' },
       )
       if (alive.current) {
         haptic('success')
@@ -149,6 +162,7 @@ export function useAddMovie(
       if (alive.current) {
         selection.current++
         setJob(null)
+        setPreferredCandidate(null)
         setMovie(null)
         setCandidate(null)
         setExistingId(null)
@@ -162,6 +176,7 @@ export function useAddMovie(
     }
   }
   function clearSelection() {
+    setExistingId(null)
     selection.current++
     setMovie(null)
     setCandidate(null)
@@ -171,6 +186,7 @@ export function useAddMovie(
   return {
     input,
     setInput,
+    preferredCandidate,
     job,
     candidate,
     movie,
