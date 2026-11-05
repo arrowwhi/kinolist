@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type { CollectionStatus } from '../features/collection/model'
+import { HomePage } from '../pages/home/HomePage'
+import { home } from './route'
 import { useNavigation } from './navigation'
 import { Shell } from '../widgets/app-shell/Shell'
 import { useTelegramSetup } from '../shared/lib/telegram'
@@ -27,12 +29,13 @@ export function App() {
   >({})
   const path = location.split('?')[0]
   const params = new URLSearchParams(location.split('?')[1])
-  const topLevel = [
+  const rootSection = [
     '/collection/want_to_watch',
     '/collection/watched',
     '/genres',
   ].includes(path)
-  useTelegramSetup(back, !topLevel)
+  const goHome = useCallback(() => navigate(home, true), [navigate])
+  useTelegramSetup(rootSection ? goHome : back, path !== home)
   const catalog = useResource((signal) => api.genres(signal), 'genres')
   const changed = useCallback((message: string) => {
     setRevision((value) => value + 1)
@@ -44,7 +47,9 @@ export function App() {
   const routeMatch = path.match(/^\/movie\/(\d+)(?:\/(note|rate))?$/)
   const genreMatch = path.match(/^\/genres\/(\d+)$/)
   let content
-  if (routeMatch && Number(routeMatch[1]) > 0) {
+  if (path === home)
+    content = <HomePage navigate={navigate} revision={revision} />
+  else if (routeMatch && Number(routeMatch[1]) > 0) {
     const props = { id: Number(routeMatch[1]), navigate, back, changed }
     content =
       routeMatch[2] === 'note' ? (
@@ -65,7 +70,9 @@ export function App() {
       />
     )
   else if (path === '/genres')
-    content = <GenresPage navigate={navigate} revision={revision} />
+    content = (
+      <GenresPage navigate={navigate} revision={revision} back={goHome} />
+    )
   else if (path === '/filters') {
     const returnTo = params.get('return') || '/collection/want_to_watch'
     const returnPath = returnTo.split('?')[0]
@@ -151,16 +158,13 @@ export function App() {
           }
           revision={revision}
           navigate={navigate}
-          back={back}
+          back={genre ? back : goHome}
         />
       )
   } else
     content = (
       <Shell title="Страница не найдена" navigate={navigate} onBack={back}>
-        <ErrorState
-          message="Вернись к своей коллекции."
-          onRetry={() => navigate('/collection/want_to_watch', true)}
-        />
+        <ErrorState message="Вернись к своей коллекции." onRetry={goHome} />
       </Shell>
     )
   return (

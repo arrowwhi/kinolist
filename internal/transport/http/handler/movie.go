@@ -23,6 +23,7 @@ type collectionUseCase interface {
 	Update(ctx context.Context, userID, userMovieID int64, upd movie.Update) (movie.UserMovie, error)
 	Delete(ctx context.Context, userID, userMovieID int64) error
 	Genres(ctx context.Context) ([]movie.Genre, error)
+	Statistics(ctx context.Context, userID int64) (movie.Statistics, error)
 	CollectionGenres(ctx context.Context, userID int64, mediaTypes ...movie.MediaType) ([]movie.GenreStats, error)
 	ResolveUser(ctx context.Context, u user.User) (user.User, error)
 }
@@ -224,4 +225,22 @@ func pathID(r *http.Request) (int64, error) {
 		return 0, movie.ErrNotFound
 	}
 	return id, nil
+}
+
+// Statistics always refers to the full collection of the authenticated user.
+func (h *Movie) Statistics(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserID(r.Context())
+	if !ok {
+		writeError(w, r, user.ErrInvalidTelegram)
+		return
+	}
+	stats, err := h.uc.Statistics(r.Context(), userID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, dto.Statistics{
+		TotalCount: stats.TotalCount, WantToWatchCount: stats.WantToWatchCount, WatchedCount: stats.WatchedCount,
+	})
 }

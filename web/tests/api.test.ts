@@ -60,6 +60,11 @@ test('API preserves media type in pagination, genre counts, details and confirma
       new URL(calls[4].url, 'http://localhost').searchParams.has('media_type'),
       false,
     )
+    await api.me()
+    assert.equal(calls[5].url, '/api/v1/me')
+    await api.statistics()
+    assert.equal(calls[6].url, '/api/v1/statistics')
+    assert.equal(calls[6].init?.cache, 'no-store')
   } finally {
     if (descriptor) Object.defineProperty(globalThis, 'window', descriptor)
     else Reflect.deleteProperty(globalThis, 'window')

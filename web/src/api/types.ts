@@ -92,3 +92,14 @@ export interface ConfirmOptions {
   note?: string
   review?: string
 }
+
+export interface Me {
+  id: number
+  username?: string
+  first_name?: string
+}
+export interface Statistics {
+  total_count: number
+  want_to_watch_count: number
+  watched_count: number
+}

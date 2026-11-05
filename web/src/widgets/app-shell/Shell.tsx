@@ -11,7 +11,7 @@ export function Shell({
   navigate,
 }: {
   title: string
-  subtitle?: string
+  subtitle?: ReactNode
   children: ReactNode
   onBack?: () => void
   actions?: ReactNode

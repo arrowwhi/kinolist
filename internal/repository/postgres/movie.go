@@ -610,3 +610,17 @@ func (r *MovieRepository) CollectionGenres(ctx context.Context, userID int64, me
 	}
 	return out, rows.Err()
 }
+
+// Statistics reads all counters in a single database snapshot. No catalogue join
+// is needed: each user_movies row represents one film or one complete series.
+func (r *MovieRepository) Statistics(ctx context.Context, userID int64) (movie.Statistics, error) {
+	const query = `SELECT count(*),
+ count(*) FILTER (WHERE status='want_to_watch'),
+ count(*) FILTER (WHERE status='watched')
+ FROM user_movies WHERE user_id=$1`
+	var stats movie.Statistics
+	if err := r.tx.Querier(ctx).QueryRow(ctx, query, userID).Scan(&stats.TotalCount, &stats.WantToWatchCount, &stats.WatchedCount); err != nil {
+		return movie.Statistics{}, fmt.Errorf("collection statistics: %w", err)
+	}
+	return stats, nil
+}

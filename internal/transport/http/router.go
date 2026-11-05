@@ -55,6 +55,7 @@ func NewRouter(d RouterDeps) http.Handler {
 		api.Use(middleware.TelegramAuth(d.Config.Telegram.BotToken, d.ResolveUser))
 
 		api.Get("/me", d.Movies.Me)
+		api.Get("/statistics", d.Movies.Statistics)
 		api.Get("/genres", d.Movies.Genres)
 
 		api.Route("/movies", func(m chi.Router) {
