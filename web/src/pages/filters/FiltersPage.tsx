@@ -1,4 +1,8 @@
 import { useState } from 'react'
+import { api } from '../../api/client'
+import { useResource } from '../../shared/hooks/useResource'
+import { contentCount } from '../../entities/movie/metadata'
+import { MediaTypeFilter } from '../../features/collection/MediaTypeFilter'
 import type { Genre } from '../../api/types'
 import type { Navigate } from '../../shared/lib/navigation'
 import { Shell } from '../../widgets/app-shell/Shell'
@@ -28,6 +32,19 @@ export function FiltersPage({
   fixedGenre?: Genre
 }) {
   const [draft, setDraft] = useState(value)
+  const count = useResource(
+    (signal) =>
+      api.listMovies(
+        {
+          status: status === 'all' ? undefined : status,
+          mediaType: draft.mediaType,
+          genreIds: fixedGenre ? [fixedGenre.id] : draft.genreIds,
+          limit: 1,
+        },
+        signal,
+      ),
+    JSON.stringify([status, draft.mediaType, fixedGenre?.id, draft.genreIds]),
+  )
   const options: { value: CollectionFilters['sort']; label: string }[] = [
     {
       value: status === 'watched' ? 'watched_at' : 'added_at',
@@ -49,6 +66,10 @@ export function FiltersPage({
           onApply(draft)
         }}
       >
+        <MediaTypeFilter
+          value={draft.mediaType}
+          onChange={(mediaType) => setDraft({ ...draft, mediaType })}
+        />
         <fieldset>
           <legend>Жанры</legend>
           {fixedGenre ? (
@@ -130,7 +151,11 @@ export function FiltersPage({
           </div>
         </fieldset>
         <div className="form-actions">
-          <Button type="submit">Применить фильтры</Button>
+          <Button type="submit">
+            {count.loading || !count.data
+              ? 'Применить фильтры'
+              : `Показать ${contentCount(count.data.summary.movie_count, draft.mediaType)}`}
+          </Button>
           <Button
             variant="secondary"
             onClick={() => setDraft(defaultFilters(status))}

@@ -32,6 +32,10 @@ paths:
     get:
       summary: Справочник жанров или сводка коллекции
       parameters:
+        - name: media_type
+          in: query
+          description: Фильтр счётчиков при scope=collection
+          schema: { type: string, enum: [movie, tv] }
         - name: scope
           in: query
           description: collection возвращает только жанры пользователя со счётчиками статусов
@@ -56,6 +60,10 @@ paths:
     get:
       summary: Коллекция пользователя
       parameters:
+        - name: media_type
+          in: query
+          description: Тип контента; отсутствие означает фильмы и сериалы вместе
+          schema: { type: string, enum: [movie, tv] }
         - name: status
           in: query
           schema: { $ref: '#/components/schemas/Status' }
@@ -168,13 +176,14 @@ paths:
               schema: { $ref: '#/components/schemas/Job' }
         '404': { $ref: '#/components/responses/NotFound' }
 
-  /jobs/{id}/candidates/{provider}/{external_id}:
+  /jobs/{id}/candidates/{provider}/{media_type}/{external_id}:
     get:
       summary: Подробности кандидата из задачи текущего пользователя
       description: Доступен только для кандидата из задачи в статусе confirming. ID фильма в ответе равен 0 до сохранения. Подробности кэшируются на 15 минут.
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
         - { name: provider, in: path, required: true, schema: { type: string, enum: [tmdb, kinopoisk] } }
+        - { name: media_type, in: path, required: true, schema: { type: string, enum: [movie, tv] } }
         - { name: external_id, in: path, required: true, schema: { type: integer, minimum: 1 } }
       responses:
         '200':
@@ -281,8 +290,13 @@ components:
 
     Movie:
       type: object
-      required: [id, title, overview, genres]
+      required: [id, title, overview, genres, media_type, season_count]
       properties:
+        media_type: { type: string, enum: [movie, tv] }
+        season_count:
+          type: [integer, 'null']
+          minimum: 1
+          description: Число обычных сезонов сериала; null для фильма или неизвестного значения
         id: { type: integer, format: int64 }
         tmdb_id: { type: integer }
         kinopoisk_id: { type: integer }
@@ -350,8 +364,13 @@ components:
 
     Candidate:
       type: object
-      required: [provider, external_id, title, overview]
+      required: [provider, external_id, title, overview, media_type, season_count]
       properties:
+        media_type: { type: string, enum: [movie, tv] }
+        season_count:
+          type: [integer, 'null']
+          minimum: 1
+          description: Число обычных сезонов сериала; null для фильма или неизвестного значения
         provider: { type: string, enum: [tmdb, kinopoisk] }
         external_id: { type: integer }
         original_title: { type: string }
@@ -390,6 +409,10 @@ components:
       type: object
       required: [provider, external_id]
       properties:
+        media_type:
+          type: string
+          enum: [movie, tv]
+          description: Передавать из выбранного кандидата. Без типа запрос принимается только для однозначного ID.
         provider: { type: string, enum: [tmdb, kinopoisk] }
         external_id: { type: integer }
 
@@ -400,7 +423,7 @@ components:
 
     CollectionSummary:
       type: object
-      description: Статус и жанры учитываются; q, limit и offset игнорируются. Средняя только по просмотренным с оценкой.
+      description: Статус, тип контента и жанры учитываются; q, limit и offset игнорируются. Средняя только по просмотренным с оценкой.
       required: [movie_count, rated_count, average_user_rating]
       properties:
         movie_count: { type: integer }

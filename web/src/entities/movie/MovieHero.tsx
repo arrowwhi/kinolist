@@ -1,4 +1,5 @@
 import type { Genre, Movie } from '../../api/types'
+import { mediaLabel, seasonCount } from './metadata'
 import { formatRuntime } from '../../shared/lib/format'
 import { Poster } from './Poster'
 import { Rating } from './Rating'
@@ -14,9 +15,20 @@ export function MovieHero({
       <Poster url={movie.poster_url} title={movie.title} size="hero" />
       <div className="movie-hero__body">
         <p className="muted small">
-          {[movie.year, formatRuntime(movie.runtime_min)]
+          {[mediaLabel(movie.media_type), movie.year]
             .filter(Boolean)
             .join(' · ')}
+          {movie.media_type === 'tv' ? (
+            <>
+              <br />
+              {seasonCount(movie.season_count)}
+            </>
+          ) : movie.runtime_min ? (
+            <>
+              <br />
+              {formatRuntime(movie.runtime_min)}
+            </>
+          ) : null}
         </p>
         <Rating movie={movie} large />
         <div className="movie-hero__genres">

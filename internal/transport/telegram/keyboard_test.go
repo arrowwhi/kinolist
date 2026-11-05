@@ -13,8 +13,8 @@ func TestCallbackRoundTrip(t *testing.T) {
 		name string
 		in   callback
 	}{
-		{"confirm with candidate", callback{actionConfirm, 42, movie.ProviderTMDB, 438631}},
-		{"kinopoisk candidate", callback{actionPick, 7, movie.ProviderKinopoisk, 41519}},
+		{"confirm with candidate", callback{actionConfirm, 42, movie.ProviderTMDB, 438631, ""}},
+		{"kinopoisk candidate", callback{actionPick, 7, movie.ProviderKinopoisk, 41519, ""}},
 		{"action without candidate", callback{Action: actionReject, JobID: 99}},
 	}
 
@@ -74,5 +74,20 @@ func TestShortLabelIsTruncated(t *testing.T) {
 
 	if len([]rune(label)) > maxButtonLabel {
 		t.Fatalf("label is %d runes, want at most %d", len([]rune(label)), maxButtonLabel)
+	}
+}
+
+func TestTypedCallbacksDistinguishSameExternalID(t *testing.T) {
+	film := callback{Action: actionPick, JobID: 1, Provider: movie.ProviderTMDB, ExternalID: 7, MediaType: movie.MediaMovie}
+	series := film
+	series.MediaType = movie.MediaTV
+	if film.encode() == series.encode() {
+		t.Fatal("type lost in callback")
+	}
+	for _, c := range []callback{film, series} {
+		got, err := parseCallback(c.encode())
+		if err != nil || got != c {
+			t.Fatalf("round trip: %+v %v", got, err)
+		}
 	}
 }

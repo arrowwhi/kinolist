@@ -12,6 +12,7 @@ type searchResponse struct {
 }
 
 type film struct {
+	Type        string  `json:"type"`
 	FilmID      int32   `json:"filmId"`
 	NameRU      string  `json:"nameRu"`
 	NameEN      string  `json:"nameEn"`
@@ -28,6 +29,7 @@ type genre struct {
 
 func (f film) toCandidate() movie.Candidate {
 	return movie.Candidate{
+		MediaType:      kinopoiskMediaType(f.Type),
 		Provider:       movie.ProviderKinopoisk,
 		ExternalID:     f.FilmID,
 		Title:          f.NameRU,
@@ -42,6 +44,7 @@ func (f film) toCandidate() movie.Candidate {
 }
 
 type filmDetails struct {
+	Type         string  `json:"type"`
 	KinopoiskID  int32   `json:"kinopoiskId"`
 	NameRU       string  `json:"nameRu"`
 	NameOriginal string  `json:"nameOriginal"`
@@ -54,7 +57,11 @@ type filmDetails struct {
 }
 
 func (d filmDetails) toCandidate() movie.Candidate {
+	if kinopoiskMediaType(d.Type) == movie.MediaTV {
+		d.FilmLength = 0
+	}
 	return movie.Candidate{
+		MediaType:     kinopoiskMediaType(d.Type),
 		Provider:      movie.ProviderKinopoisk,
 		ExternalID:    d.KinopoiskID,
 		Title:         d.NameRU,
@@ -97,4 +104,15 @@ func parseRating(s string) float32 {
 		return 0
 	}
 	return float32(v)
+}
+
+func kinopoiskMediaType(kind string) movie.MediaType {
+	switch kind {
+	case "TV_SERIES", "MINI_SERIES", "TV_SHOW":
+		return movie.MediaTV
+	case "FILM", "VIDEO":
+		return movie.MediaMovie
+	default:
+		return ""
+	}
 }

@@ -50,7 +50,11 @@ export function InlineError({ message }: { message: string | null }) {
 }
 export function SkeletonList() {
   return (
-    <div className="skeleton-list" role="status" aria-label="Загружаем фильмы">
+    <div
+      className="skeleton-list"
+      role="status"
+      aria-label="Загружаем коллекцию"
+    >
       {[1, 2, 3].map((i) => (
         <div className="skeleton-card" key={i}>
           <div className="skeleton skeleton-card__poster" />

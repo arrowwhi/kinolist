@@ -38,3 +38,15 @@ func TestNewSortFieldsAccepted(t *testing.T) {
 		}
 	}
 }
+
+func TestMediaTypeFilterValidation(t *testing.T) {
+	for _, kind := range []string{"movie", "tv", ""} {
+		f, err := parseFilter(httptest.NewRequest("GET", "/movies?media_type="+kind, nil), 7)
+		if err != nil || string(f.MediaType) != kind {
+			t.Fatalf("filter: %+v %v", f, err)
+		}
+	}
+	if _, err := parseFilter(httptest.NewRequest("GET", "/movies?media_type=person", nil), 7); err == nil {
+		t.Fatal("invalid type accepted")
+	}
+}

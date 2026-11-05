@@ -1,5 +1,8 @@
 import { useMemo } from 'react'
-import type { Genre, GenreStats } from '../../api/types'
+import { api } from '../../api/client'
+import { useResource } from '../../shared/hooks/useResource'
+import { contentCount, mediaFilterLabel } from '../../entities/movie/metadata'
+import type { Genre } from '../../api/types'
 import type { Navigate } from '../../shared/lib/navigation'
 import { Shell } from '../../widgets/app-shell/Shell'
 import { Button } from '../../shared/ui/Button'
@@ -23,7 +26,6 @@ export function CollectionPage({
   status,
   genre,
   genres,
-  genreStats,
   preferences,
   onPreferences,
   revision,
@@ -33,7 +35,6 @@ export function CollectionPage({
   status: CollectionStatus
   genre?: Genre
   genres: Genre[]
-  genreStats: GenreStats[]
   preferences: CollectionPreferences
   onPreferences: (value: CollectionPreferences) => void
   revision: number
@@ -41,6 +42,11 @@ export function CollectionPage({
   back: () => void
 }) {
   const { filters, search } = preferences
+  const genreResource = useResource(
+    (signal) => api.collectionGenres(signal, filters.mediaType),
+    `${revision}:${filters.mediaType ?? 'all'}`,
+  )
+  const genreStats = genreResource.data?.items ?? []
   const query = useDebounced(search)
   const collection = useCollection(status, filters, query, revision, genre?.id)
   const { page, summary, loading, error } = collection
@@ -60,7 +66,11 @@ export function CollectionPage({
       filters: { ...filters, genreIds: id == null ? [] : [id] },
     })
   const usedGenres = genreStats.filter((g) =>
-    watched ? g.watched_count > 0 : g.want_to_watch_count > 0,
+    status === 'all'
+      ? g.watched_count + g.want_to_watch_count > 0
+      : watched
+        ? g.watched_count > 0
+        : g.want_to_watch_count > 0,
   )
   const filterLabel =
     genre?.name_ru ??
@@ -85,7 +95,7 @@ export function CollectionPage({
       tab={genre ? 'genres' : status === 'all' ? 'want_to_watch' : status}
       actions={
         !watched ? (
-          <Button onClick={() => navigate('/add')}>＋ Добавить фильм</Button>
+          <Button onClick={() => navigate('/add')}>＋ Добавить</Button>
         ) : undefined
       }
     >
@@ -168,11 +178,23 @@ export function CollectionPage({
         </div>
       )}
       {watched && summary && (
-        <CollectionStats summary={summary} filterLabel={filterLabel} />
+        <CollectionStats
+          summary={summary}
+          filterLabel={filterLabel}
+          mediaType={filters.mediaType}
+        />
+      )}
+      {!watched && (
+        <p className="muted small collection-caption" aria-live="polite">
+          По фильтрам · {mediaFilterLabel(filters.mediaType)} · {filterLabel}
+          {summary
+            ? ` · ${contentCount(summary.movie_count, filters.mediaType)}`
+            : ''}
+        </p>
       )}
       <Field
         type="search"
-        aria-label="Поиск фильмов"
+        aria-label="Поиск в коллекции"
         placeholder={
           watched ? 'Поиск среди просмотренных' : 'Поиск в коллекции'
         }
@@ -197,21 +219,21 @@ export function CollectionPage({
           description={
             query
               ? 'Попробуй другое название или измени фильтры.'
-              : filters.genreIds.length || genre
-                ? 'В выбранном жанре пока нет фильмов.'
+              : filters.genreIds.length || filters.mediaType || genre
+                ? 'По выбранным фильтрам пока ничего нет.'
                 : watched
-                  ? 'Отметь первый просмотренный фильм — он появится здесь.'
-                  : 'Добавь название или ссылку на рилс. Сохраним фильм на потом.'
+                  ? 'Отметь фильм или сериал просмотренным — он появится здесь.'
+                  : 'Добавь фильм или сериал по названию или ссылке на рилс.'
           }
           action={
-            query || filters.genreIds.length
+            query || filters.genreIds.length || filters.mediaType
               ? 'Сбросить поиск и фильтры'
-              : 'Добавить фильм'
+              : 'Добавить в коллекцию'
           }
           onAction={() =>
-            query || filters.genreIds.length
+            query || filters.genreIds.length || filters.mediaType
               ? onPreferences({
-                  filters: { ...filters, genreIds: [] },
+                  filters: { ...filters, genreIds: [], mediaType: undefined },
                   search: '',
                 })
               : navigate('/add')

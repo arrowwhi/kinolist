@@ -3,7 +3,7 @@ export function Rating({
   movie,
   large = false,
 }: {
-  movie: Movie
+  movie: Pick<Movie, 'rating' | 'rating_provider' | 'rating_vote_count'>
   large?: boolean
 }) {
   if (!movie.rating) return <span className="muted">Нет оценки каталога</span>
@@ -15,7 +15,7 @@ export function Rating({
         : 'Рейтинг каталога'
   const votes = movie.rating_vote_count
   return (
-    <div
+    <span
       className={
         large ? 'catalog-rating catalog-rating--large' : 'catalog-rating'
       }
@@ -27,6 +27,6 @@ export function Rating({
           ? ` · ${new Intl.NumberFormat('ru-RU', { notation: 'compact', maximumFractionDigits: 1 }).format(votes)} оценок`
           : ''}
       </span>
-    </div>
+    </span>
   )
 }

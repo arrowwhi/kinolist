@@ -19,7 +19,7 @@ import (
 type (
 	enrichmentUseCase interface {
 		Enqueue(ctx context.Context, userID, chatID int64, input string) (enrichment.Job, error)
-		Confirm(ctx context.Context, userID, jobID int64, provider movie.Provider, externalID int32) (movie.UserMovie, error)
+		Confirm(ctx context.Context, userID, jobID int64, provider movie.Provider, externalID int32, mediaTypes ...movie.MediaType) (movie.UserMovie, error)
 		Reject(ctx context.Context, userID, jobID int64) error
 		JobForUser(ctx context.Context, userID, jobID int64) (enrichment.Job, error)
 	}
@@ -201,7 +201,7 @@ func (b *Bot) handleCallback(ctx context.Context, q *CallbackQuery) {
 }
 
 func (b *Bot) confirm(ctx context.Context, userID, chatID int64, c callback) string {
-	um, err := b.enrichment.Confirm(ctx, userID, c.JobID, c.Provider, c.ExternalID)
+	um, err := b.enrichment.Confirm(ctx, userID, c.JobID, c.Provider, c.ExternalID, c.MediaType)
 	switch {
 	case errors.Is(err, movie.ErrAlreadyInCollection):
 		b.reply(ctx, chatID, "📌 Этот фильм уже есть в вашей коллекции.")

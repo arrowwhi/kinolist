@@ -55,43 +55,52 @@ func (c *Client) Search(ctx context.Context, title string, year int16) ([]movie.
 		"language":      {c.language},
 		"include_adult": {"false"},
 	}
-	if year > 0 {
-		params.Set("primary_release_year", strconv.Itoa(int(year)))
-	}
 
 	var resp searchResponse
-	if err := c.get(ctx, "/search/movie", params, &resp); err != nil {
+	if err := c.get(ctx, "/search/multi", params, &resp); err != nil {
 		return nil, err
 	}
-
-	// Год мог быть распознан неверно — если с ним ничего не нашлось,
-	// повторяем без него, иначе теряем фильм из-за одной цифры.
-	if len(resp.Results) == 0 && year > 0 {
-		params.Del("primary_release_year")
-		if err := c.get(ctx, "/search/movie", params, &resp); err != nil {
-			return nil, err
-		}
-	}
-
 	candidates := make([]movie.Candidate, 0, len(resp.Results))
 	for _, r := range resp.Results {
+		if r.MediaType != movie.MediaMovie && r.MediaType != movie.MediaTV {
+			continue
+		}
 		candidates = append(candidates, r.toCandidate())
+	}
+	if year > 0 {
+		filtered := make([]movie.Candidate, 0, len(candidates))
+		for _, v := range candidates {
+			if v.Year == year {
+				filtered = append(filtered, v)
+			}
+		}
+		if len(filtered) > 0 {
+			return filtered, nil
+		}
 	}
 
 	return candidates, nil
 }
 
-func (c *Client) Details(ctx context.Context, externalID int32) (movie.Candidate, error) {
+func (c *Client) Details(ctx context.Context, externalID int32, mediaTypes ...movie.MediaType) (movie.Candidate, error) {
 	params := url.Values{"language": {c.language}}
 
+	mediaType := movie.MediaMovie
+	if len(mediaTypes) > 0 {
+		mediaType = mediaTypes[0]
+	}
+	if !mediaType.Valid() {
+		return movie.Candidate{}, movie.ErrInvalidMediaType
+	}
 	var resp detailsResponse
-	if err := c.get(ctx, "/movie/"+strconv.Itoa(int(externalID)), params, &resp); err != nil {
+	if err := c.get(ctx, "/"+string(mediaType)+"/"+strconv.Itoa(int(externalID)), params, &resp); err != nil {
 		return movie.Candidate{}, err
 	}
 	if resp.ID == 0 {
 		return movie.Candidate{}, movie.ErrNotFound
 	}
 
+	resp.MediaType = mediaType
 	return resp.toCandidate(), nil
 }
 

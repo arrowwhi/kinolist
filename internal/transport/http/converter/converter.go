@@ -43,6 +43,7 @@ func Genres(genres []movie.Genre) []dto.Genre {
 
 func Movie(m movie.Movie) dto.Movie {
 	return dto.Movie{
+		MediaType: string(m.MediaType.Normalize()), SeasonCount: m.SeasonCount,
 		ID: m.ID, TMDBID: m.TMDBID, KinopoiskID: m.KinopoiskID,
 		Title: m.Title, OriginalTitle: m.OriginalTitle, Year: m.Year,
 		Overview: m.Overview, PosterURL: PosterURL(m.PosterPath),
@@ -77,6 +78,7 @@ func MovieList(p collection.Page) dto.MovieList {
 
 func Candidate(c movie.Candidate) dto.Candidate {
 	return dto.Candidate{
+		MediaType: string(c.MediaType.Normalize()), SeasonCount: c.SeasonCount,
 		Provider: string(c.Provider), ExternalID: c.ExternalID,
 		Title: c.Title, Year: c.Year, Overview: c.Overview,
 		OriginalTitle: c.OriginalTitle, RuntimeMin: c.RuntimeMin, RatingProvider: string(c.RatingProvider), RatingVoteCount: c.RatingVoteCount, Genres: []dto.Genre{},

@@ -67,7 +67,8 @@ func NewRouter(d RouterDeps) http.Handler {
 		api.Route("/jobs", func(j chi.Router) {
 			j.Post("/", d.Jobs.Create)
 			j.Get("/{id}", d.Jobs.Get)
-			j.Get("/{id}/candidates/{provider}/{external_id}", d.Jobs.CandidateDetails)
+			j.Get("/{id}/candidates/{provider}/{external_id}", d.Jobs.CandidateDetails) // legacy, rejects ambiguous IDs
+			j.Get("/{id}/candidates/{provider}/{media_type}/{external_id}", d.Jobs.CandidateDetails)
 			j.Post("/{id}/confirm", d.Jobs.Confirm)
 			j.Post("/{id}/reject", d.Jobs.Reject)
 		})

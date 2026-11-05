@@ -44,7 +44,7 @@ type (
 	catalog interface {
 		Provider() movie.Provider
 		Search(ctx context.Context, title string, year int16) ([]movie.Candidate, error)
-		Details(ctx context.Context, externalID int32) (movie.Candidate, error)
+		Details(ctx context.Context, externalID int32, mediaTypes ...movie.MediaType) (movie.Candidate, error)
 	}
 
 	txManager interface {
@@ -256,8 +256,12 @@ func (uc *UseCase) search(ctx context.Context, title string, year int16) ([]movi
 }
 
 // Confirm сохраняет выбранного кандидата в коллекцию пользователя.
-func (uc *UseCase) Confirm(ctx context.Context, userID, jobID int64, provider movie.Provider, externalID int32) (movie.UserMovie, error) {
-	return uc.ConfirmWithOptions(ctx, userID, jobID, provider, externalID, movie.ConfirmOptions{})
+func (uc *UseCase) Confirm(ctx context.Context, userID, jobID int64, provider movie.Provider, externalID int32, mediaTypes ...movie.MediaType) (movie.UserMovie, error) {
+	var mt movie.MediaType
+	if len(mediaTypes) > 0 {
+		mt = mediaTypes[0]
+	}
+	return uc.ConfirmWithOptions(ctx, userID, jobID, provider, externalID, movie.ConfirmOptions{MediaType: mt})
 }
 
 func (uc *UseCase) ConfirmWithOptions(ctx context.Context, userID, jobID int64, provider movie.Provider, externalID int32, options movie.ConfirmOptions) (movie.UserMovie, error) {
@@ -275,7 +279,7 @@ func (uc *UseCase) ConfirmWithOptions(ctx context.Context, userID, jobID int64, 
 		return movie.UserMovie{}, enrichment.ErrJobNotConfirmable
 	}
 
-	chosen, ok := findCandidate(job.Candidates, provider, externalID)
+	chosen, ok := findCandidate(job.Candidates, provider, externalID, options.MediaType)
 	if !ok {
 		return movie.UserMovie{}, enrichment.ErrCandidateNotInJob
 	}
@@ -452,6 +456,7 @@ func (uc *UseCase) resolveGenres(ctx context.Context, c movie.Candidate) ([]movi
 
 func toMovie(c movie.Candidate, genres []movie.Genre) movie.Movie {
 	m := movie.Movie{
+		MediaType: c.MediaType.Normalize(), SeasonCount: c.SeasonCount,
 		Title:         c.Title,
 		OriginalTitle: c.OriginalTitle,
 		Year:          c.Year,
@@ -469,18 +474,29 @@ func toMovie(c movie.Candidate, genres []movie.Genre) movie.Movie {
 	return m
 }
 
-func findCandidate(candidates []movie.Candidate, p movie.Provider, id int32) (movie.Candidate, bool) {
+func findCandidate(candidates []movie.Candidate, p movie.Provider, id int32, mediaType movie.MediaType) (movie.Candidate, bool) {
+	var found movie.Candidate
+	count := 0
 	for _, c := range candidates {
-		if c.Provider == p && c.ExternalID == id {
-			return c, true
+		if c.Provider == p && c.ExternalID == id && (mediaType == "" || c.MediaType.Normalize() == mediaType) {
+			found = c
+			found.MediaType = found.MediaType.Normalize()
+			count++
 		}
 	}
-	return movie.Candidate{}, false
+	return found, count == 1
 }
 
 // CandidateDetails is scoped to the authenticated user's job, not a public
 // catalogue proxy. Never fetch a candidate not offered by that job.
-func (uc *UseCase) CandidateDetails(ctx context.Context, userID, jobID int64, provider movie.Provider, externalID int32) (movie.Movie, error) {
+func (uc *UseCase) CandidateDetails(ctx context.Context, userID, jobID int64, provider movie.Provider, externalID int32, mediaTypes ...movie.MediaType) (movie.Movie, error) {
+	var options movie.ConfirmOptions
+	if len(mediaTypes) > 0 {
+		options.MediaType = mediaTypes[0]
+	}
+	if err := options.Validate(); err != nil {
+		return movie.Movie{}, err
+	}
 	job, err := uc.jobs.GetForUser(ctx, userID, jobID)
 	if err != nil {
 		return movie.Movie{}, err
@@ -488,7 +504,7 @@ func (uc *UseCase) CandidateDetails(ctx context.Context, userID, jobID int64, pr
 	if job.Status != enrichment.StatusConfirming {
 		return movie.Movie{}, enrichment.ErrJobNotConfirmable
 	}
-	chosen, ok := findCandidate(job.Candidates, provider, externalID)
+	chosen, ok := findCandidate(job.Candidates, provider, externalID, options.MediaType)
 	if !ok {
 		return movie.Movie{}, enrichment.ErrCandidateNotInJob
 	}
@@ -504,7 +520,7 @@ func (uc *UseCase) CandidateDetails(ctx context.Context, userID, jobID int64, pr
 }
 
 func (uc *UseCase) details(ctx context.Context, chosen movie.Candidate) (movie.Candidate, error) {
-	key := fmt.Sprintf("%s:%d", chosen.Provider, chosen.ExternalID)
+	key := fmt.Sprintf("%s:%s:%d", chosen.Provider, chosen.MediaType.Normalize(), chosen.ExternalID)
 	uc.detailsMu.Lock()
 	cached, ok := uc.detailsCache[key]
 	uc.detailsMu.Unlock()
@@ -521,12 +537,21 @@ func (uc *UseCase) details(ctx context.Context, chosen movie.Candidate) (movie.C
 	if provider == nil {
 		return movie.Candidate{}, movie.ErrProviderUnavailable
 	}
-	d, err := provider.Details(ctx, chosen.ExternalID)
+	d, err := provider.Details(ctx, chosen.ExternalID, chosen.MediaType.Normalize())
 	if err != nil {
 		return movie.Candidate{}, err
 	}
-	if d.ExternalID != chosen.ExternalID || d.Provider != chosen.Provider {
+	if d.ExternalID != chosen.ExternalID || d.Provider != chosen.Provider || d.MediaType.Normalize() != chosen.MediaType.Normalize() {
 		return movie.Candidate{}, movie.ErrNotFound
+	}
+	d.MediaType = d.MediaType.Normalize()
+	if d.MediaType == movie.MediaTV {
+		d.RuntimeMin = 0
+		if d.SeasonCount == nil {
+			d.SeasonCount = chosen.SeasonCount
+		}
+	} else {
+		d.SeasonCount = nil
 	}
 	if d.Title == "" {
 		d.Title = chosen.Title

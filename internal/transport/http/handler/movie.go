@@ -23,7 +23,7 @@ type collectionUseCase interface {
 	Update(ctx context.Context, userID, userMovieID int64, upd movie.Update) (movie.UserMovie, error)
 	Delete(ctx context.Context, userID, userMovieID int64) error
 	Genres(ctx context.Context) ([]movie.Genre, error)
-	CollectionGenres(ctx context.Context, userID int64) ([]movie.GenreStats, error)
+	CollectionGenres(ctx context.Context, userID int64, mediaTypes ...movie.MediaType) ([]movie.GenreStats, error)
 	ResolveUser(ctx context.Context, u user.User) (user.User, error)
 }
 
@@ -140,7 +140,7 @@ func (h *Movie) Genres(w http.ResponseWriter, r *http.Request) {
 			writeError(w, r, user.ErrInvalidTelegram)
 			return
 		}
-		genres, err := h.uc.CollectionGenres(r.Context(), userID)
+		genres, err := h.uc.CollectionGenres(r.Context(), userID, movie.MediaType(r.URL.Query().Get("media_type")))
 		if err != nil {
 			writeError(w, r, err)
 			return
@@ -180,13 +180,17 @@ func parseFilter(r *http.Request, userID int64) (movie.Filter, error) {
 	q := r.URL.Query()
 
 	f := movie.Filter{
-		UserID: userID,
-		Status: movie.Status(q.Get("status")),
-		Query:  q.Get("q"),
-		SortBy: movie.SortBy(q.Get("sort")),
-		Desc:   q.Get("order") != "asc",
+		MediaType: movie.MediaType(q.Get("media_type")),
+		UserID:    userID,
+		Status:    movie.Status(q.Get("status")),
+		Query:     q.Get("q"),
+		SortBy:    movie.SortBy(q.Get("sort")),
+		Desc:      q.Get("order") != "asc",
 	}
 
+	if f.MediaType != "" && !f.MediaType.Valid() {
+		return movie.Filter{}, movie.ErrInvalidMediaType
+	}
 	if raw := q.Get("genre_ids"); raw != "" {
 		for _, part := range strings.Split(raw, ",") {
 			id, err := strconv.ParseInt(strings.TrimSpace(part), 10, 16)

@@ -6,6 +6,7 @@ import { useResource } from '../../shared/hooks/useResource'
 import { useMutation } from '../../shared/hooks/useMutation'
 import { ErrorState, SkeletonList } from '../../shared/ui/Feedback'
 import { RatingForm } from '../../features/rating/RatingForm'
+import { movieMetadata } from '../../entities/movie/metadata'
 function RateEditor({
   item,
   back,
@@ -18,7 +19,7 @@ function RateEditor({
   const mutation = useMutation()
   return (
     <RatingForm
-      title={[item.movie.title, item.movie.year].filter(Boolean).join(' · ')}
+      title={`${item.movie.title} · ${movieMetadata(item.movie)}`}
       initialRating={item.user_rating}
       initialReview={item.review}
       busy={mutation.busy}
@@ -53,7 +54,17 @@ export function RatePage({
 }) {
   const resource = useResource((signal) => api.getMovie(id, signal), id)
   return (
-    <Shell title="Как тебе фильм?" navigate={navigate} onBack={back}>
+    <Shell
+      title={
+        resource.data?.movie.media_type === 'tv'
+          ? 'Как тебе сериал?'
+          : resource.data
+            ? 'Как тебе фильм?'
+            : 'Оценка и отзыв'
+      }
+      navigate={navigate}
+      onBack={back}
+    >
       {resource.loading ? (
         <SkeletonList />
       ) : resource.error ? (

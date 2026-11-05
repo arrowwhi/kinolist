@@ -43,19 +43,20 @@ func run() error {
 		return err
 	}
 	defer pool.Close()
-	rows, err := pool.Query(ctx, `SELECT id,coalesce(tmdb_id,0),coalesce(kinopoisk_id,0) FROM movies
- WHERE id>$1 AND (runtime_min IS NULL OR rating_provider IS NULL OR (tmdb_id IS NOT NULL AND rating_vote_count IS NULL)) ORDER BY id LIMIT $2`, *after, *limit)
+	rows, err := pool.Query(ctx, `SELECT id,coalesce(tmdb_id,0),coalesce(kinopoisk_id,0),media_type FROM movies
+ WHERE id>$1 AND ((media_type='movie' AND runtime_min IS NULL) OR (media_type='tv' AND season_count IS NULL) OR rating_provider IS NULL OR (tmdb_id IS NOT NULL AND rating_vote_count IS NULL)) ORDER BY id LIMIT $2`, *after, *limit)
 	if err != nil {
 		return err
 	}
 	type entry struct {
-		id       int64
-		tmdb, kp int32
+		mediaType movie.MediaType
+		id        int64
+		tmdb, kp  int32
 	}
 	var entries []entry
 	for rows.Next() {
 		var e entry
-		if err := rows.Scan(&e.id, &e.tmdb, &e.kp); err != nil {
+		if err := rows.Scan(&e.id, &e.tmdb, &e.kp, &e.mediaType); err != nil {
 			rows.Close()
 			return err
 		}
@@ -79,9 +80,9 @@ func run() error {
 		var d movie.Candidate
 		switch {
 		case e.tmdb != 0:
-			d, err = primary.Details(ctx, e.tmdb)
+			d, err = primary.Details(ctx, e.tmdb, e.mediaType)
 		case cfg.Kinopoisk.Enabled():
-			d, err = fallback.Details(ctx, e.kp)
+			d, err = fallback.Details(ctx, e.kp, e.mediaType)
 		default:
 			err = movie.ErrProviderUnavailable
 		}
@@ -93,7 +94,7 @@ func run() error {
    rating=coalesce(nullif($3::numeric,0),rating),
    rating_provider=CASE WHEN $3::numeric<>0 THEN $4 ELSE rating_provider END,
    rating_vote_count=CASE WHEN $3::numeric<>0 THEN $5 ELSE rating_vote_count END,
-   updated_at=now() WHERE id=$1`, e.id, d.RuntimeMin, d.Rating, d.RatingProvider, d.RatingVoteCount)
+   season_count=coalesce($6,season_count), updated_at=now() WHERE id=$1`, e.id, d.RuntimeMin, d.Rating, d.RatingProvider, d.RatingVoteCount, d.SeasonCount)
 			if err != nil {
 				return fmt.Errorf("update movie %d: %w", e.id, err)
 			}

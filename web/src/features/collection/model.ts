@@ -1,8 +1,9 @@
 import type { ListParams } from '../../api/client'
-import type { Status, UserMovie } from '../../api/types'
+import type { MediaType, Status, UserMovie } from '../../api/types'
 export type CollectionStatus = Status | 'all'
 export type GroupBy = 'date' | 'genre' | 'none'
 export interface CollectionFilters {
+  mediaType?: MediaType
   genreIds: number[]
   sort: NonNullable<ListParams['sort']>
   order: 'asc' | 'desc'
@@ -10,6 +11,7 @@ export interface CollectionFilters {
 }
 export function defaultFilters(status: CollectionStatus): CollectionFilters {
   return {
+    mediaType: undefined,
     genreIds: [],
     sort: status === 'watched' ? 'watched_at' : 'added_at',
     order: 'desc',

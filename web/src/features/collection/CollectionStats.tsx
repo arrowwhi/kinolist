@@ -1,20 +1,24 @@
-import { movieCount } from '../../shared/lib/format'
-import type { MovieList } from '../../api/types'
+import { contentCount, mediaFilterLabel } from '../../entities/movie/metadata'
+import type { MediaType, MovieList } from '../../api/types'
 export function CollectionStats({
   summary,
   filterLabel,
+  mediaType,
 }: {
   summary: MovieList['summary']
+  mediaType?: MediaType
   filterLabel: string
 }) {
   return (
     <div className="stats-block">
-      <p className="muted small">По текущим фильтрам · {filterLabel}</p>
+      <p className="muted small">
+        По текущим фильтрам · {mediaFilterLabel(mediaType)} · {filterLabel}
+      </p>
       <div
         className="stats"
         aria-label="Статистика по фильтрам без учёта поиска"
       >
-        <span>{movieCount(summary.movie_count)}</span>
+        <span>{contentCount(summary.movie_count, mediaType)}</span>
         <span className="accent">
           {summary.average_user_rating == null
             ? '—'

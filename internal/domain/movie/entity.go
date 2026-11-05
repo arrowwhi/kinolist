@@ -33,6 +33,30 @@ const (
 	ProviderKinopoisk Provider = "kinopoisk"
 )
 
+type MediaType string
+
+const (
+	MediaMovie MediaType = "movie"
+	MediaTV    MediaType = "tv"
+)
+
+func (m MediaType) Valid() bool { return m == MediaMovie || m == MediaTV }
+
+// Normalize supports candidates persisted before media types were introduced.
+func (m MediaType) Normalize() MediaType {
+	if m == "" {
+		return MediaMovie
+	}
+	return m
+}
+
+func (m MediaType) Label() string {
+	if m == MediaTV {
+		return "Сериал"
+	}
+	return "Фильм"
+}
+
 type Genre struct {
 	ID     int16
 	TMDBID int32
@@ -42,6 +66,8 @@ type Genre struct {
 
 // Movie — карточка фильма в общем каталоге, одна на всех пользователей.
 type Movie struct {
+	MediaType       MediaType
+	SeasonCount     *int16
 	ID              int64
 	TMDBID          int32
 	KinopoiskID     int32
@@ -76,6 +102,8 @@ type UserMovie struct {
 
 // Candidate — результат поиска во внешнем каталоге, ещё не сохранённый.
 type Candidate struct {
+	MediaType       MediaType
+	SeasonCount     *int16
 	Provider        Provider
 	ExternalID      int32
 	Title           string
@@ -115,14 +143,15 @@ func (s SortBy) Valid() bool {
 
 // Filter описывает выборку коллекции пользователя.
 type Filter struct {
-	UserID   int64
-	Status   Status
-	GenreIDs []int16
-	Query    string
-	SortBy   SortBy
-	Desc     bool
-	Limit    int
-	Offset   int
+	MediaType MediaType
+	UserID    int64
+	Status    Status
+	GenreIDs  []int16
+	Query     string
+	SortBy    SortBy
+	Desc      bool
+	Limit     int
+	Offset    int
 }
 
 const (
@@ -173,6 +202,7 @@ type GenreStats struct {
 	WatchedCount     int
 }
 type ConfirmOptions struct {
+	MediaType  MediaType
 	Status     Status
 	UserRating int16
 	Note       string
@@ -189,6 +219,9 @@ func ValidateReview(review string) error {
 }
 
 func (o ConfirmOptions) Validate() error {
+	if o.MediaType != "" && !o.MediaType.Valid() {
+		return ErrInvalidMediaType
+	}
 	if o.Status != "" && !o.Status.Valid() {
 		return ErrInvalidStatus
 	}

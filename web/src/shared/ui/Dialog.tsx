@@ -33,7 +33,7 @@ export function ConfirmDialog({
       <p className="muted">{description}</p>
       <div className="stack">
         <Button variant="danger" busy={busy} onClick={onConfirm}>
-          Удалить фильм
+          Удалить
         </Button>
         <Button variant="secondary" disabled={busy} onClick={onCancel}>
           Отмена

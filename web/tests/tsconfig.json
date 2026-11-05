@@ -1,0 +1,8 @@
+{
+  "extends": "../tsconfig.app.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "types": ["node"]
+  },
+  "include": ["./*.test.ts", "../src/telegram.d.ts"]
+}

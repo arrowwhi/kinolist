@@ -18,7 +18,7 @@ export class ErrorBoundary extends Component<
       <main className="app-shell stack">
         <h1>Не получилось открыть страницу</h1>
         <p className="muted">
-          Перезагрузи приложение. Сохранённые фильмы останутся в коллекции.
+          Перезагрузи приложение. Сохранённая коллекция останется на месте.
         </p>
         <Button onClick={() => window.location.reload()}>Перезагрузить</Button>
       </main>

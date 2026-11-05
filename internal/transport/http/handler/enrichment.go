@@ -19,10 +19,9 @@ import (
 type enrichmentUseCase interface {
 	Enqueue(ctx context.Context, userID, chatID int64, input string) (enrichment.Job, error)
 	JobForUser(ctx context.Context, userID, jobID int64) (enrichment.Job, error)
-	Confirm(ctx context.Context, userID, jobID int64, provider movie.Provider, externalID int32) (movie.UserMovie, error)
 	Reject(ctx context.Context, userID, jobID int64) error
 	ConfirmWithOptions(ctx context.Context, userID, jobID int64, provider movie.Provider, externalID int32, options movie.ConfirmOptions) (movie.UserMovie, error)
-	CandidateDetails(ctx context.Context, userID, jobID int64, provider movie.Provider, externalID int32) (movie.Movie, error)
+	CandidateDetails(ctx context.Context, userID, jobID int64, provider movie.Provider, externalID int32, mediaTypes ...movie.MediaType) (movie.Movie, error)
 }
 
 type Enrichment struct {
@@ -104,7 +103,7 @@ func (h *Enrichment) Confirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	um, err := h.uc.ConfirmWithOptions(r.Context(), userID, id, movie.Provider(req.Provider), req.ExternalID, movie.ConfirmOptions{Status: movie.Status(req.Status), UserRating: req.UserRating, Review: req.Review, Note: req.Note})
+	um, err := h.uc.ConfirmWithOptions(r.Context(), userID, id, movie.Provider(req.Provider), req.ExternalID, movie.ConfirmOptions{MediaType: movie.MediaType(req.MediaType), Status: movie.Status(req.Status), UserRating: req.UserRating, Review: req.Review, Note: req.Note})
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -170,7 +169,15 @@ func (h *Enrichment) CandidateDetails(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, errmap.ErrBadRequest)
 		return
 	}
-	m, err := h.uc.CandidateDetails(r.Context(), userID, jobID, movie.Provider(chi.URLParam(r, "provider")), int32(externalID))
+	mt := movie.MediaType(chi.URLParam(r, "media_type"))
+	if mt == "" {
+		mt = movie.MediaType(r.URL.Query().Get("media_type"))
+	}
+	if mt != "" && !mt.Valid() {
+		writeError(w, r, movie.ErrInvalidMediaType)
+		return
+	}
+	m, err := h.uc.CandidateDetails(r.Context(), userID, jobID, movie.Provider(chi.URLParam(r, "provider")), int32(externalID), mt)
 	if err != nil {
 		writeError(w, r, err)
 		return

@@ -31,6 +31,7 @@ type entry struct {
 }
 
 var table = []entry{
+	{movie.ErrInvalidMediaType, Response{http.StatusBadRequest, "invalid_media_type", "Недопустимый тип: movie или tv"}},
 	{movie.ErrReviewTooLong, Response{http.StatusBadRequest, "review_too_long", "Отзыв не должен превышать 5000 символов"}},
 	{ErrBadRequest, Response{http.StatusBadRequest, "bad_request", "Некорректный запрос"}},
 

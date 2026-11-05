@@ -43,18 +43,23 @@ func (m *MockmovieRepository) EXPECT() *MockmovieRepositoryMockRecorder {
 }
 
 // CollectionGenres mocks base method.
-func (m *MockmovieRepository) CollectionGenres(ctx context.Context, userID int64) ([]movie.GenreStats, error) {
+func (m *MockmovieRepository) CollectionGenres(ctx context.Context, userID int64, mediaTypes ...movie.MediaType) ([]movie.GenreStats, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CollectionGenres", ctx, userID)
+	varargs := []any{ctx, userID}
+	for _, a := range mediaTypes {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "CollectionGenres", varargs...)
 	ret0, _ := ret[0].([]movie.GenreStats)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CollectionGenres indicates an expected call of CollectionGenres.
-func (mr *MockmovieRepositoryMockRecorder) CollectionGenres(ctx, userID any) *gomock.Call {
+func (mr *MockmovieRepositoryMockRecorder) CollectionGenres(ctx, userID any, mediaTypes ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CollectionGenres", reflect.TypeOf((*MockmovieRepository)(nil).CollectionGenres), ctx, userID)
+	varargs := append([]any{ctx, userID}, mediaTypes...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CollectionGenres", reflect.TypeOf((*MockmovieRepository)(nil).CollectionGenres), varargs...)
 }
 
 // Count mocks base method.
