@@ -11,6 +11,25 @@ const genres = [
   { id: 18, name_ru: 'Драма', name_en: 'Drama' },
   { id: 878, name_ru: 'Фантастика', name_en: 'Science Fiction' },
 ]
+const directors = [
+  {
+    id: 17,
+    tmdb_id: 137427,
+    name: 'Дени Вильнёв',
+    original_name: 'Denis Villeneuve',
+  },
+  { id: 18, tmdb_id: 147, name: 'Бен Стиллер', original_name: 'Ben Stiller' },
+  { id: 19, tmdb_id: 3998226, name: 'Селин Сон', original_name: 'Celine Song' },
+  { id: 20, tmdb_id: 200, name: 'Вим Вендерс', original_name: 'Wim Wenders' },
+  {
+    id: 21,
+    tmdb_id: 201,
+    name: 'Аойф Макардл',
+    original_name: 'Aoife McArdle',
+  },
+  { id: 22, tmdb_id: 202, name: 'Джессика Ли', original_name: 'Jessica Lee' },
+  { id: 23, tmdb_id: 203, name: 'Джон Смит', original_name: 'John Smith' },
+]
 const makeMovie = (id, title, media_type = 'movie', season_count = null) => ({
   id,
   title,
@@ -27,6 +46,10 @@ const makeMovie = (id, title, media_type = 'movie', season_count = null) => ({
   rating_provider: 'tmdb',
   rating_vote_count: 20000,
   genres: [genres[0]],
+  directors:
+    media_type === 'tv'
+      ? [directors[1], directors[4], directors[5], directors[6]]
+      : [id === 1 ? directors[0] : directors[2]],
 })
 const movies = [
   makeMovie(1, 'Дюна: Часть вторая'),
@@ -36,6 +59,7 @@ const movies = [
 ]
 movies[0].genres = [genres[1]]
 movies[0].year = 2024
+movies[3].directors = []
 const catalog = [
   { ...movies[0], external_id: 1 },
   { ...movies[1], external_id: 2 },
@@ -96,6 +120,91 @@ http
       if (type && !['movie', 'tv'].includes(type))
         return send(res, 400, { message: 'Недопустимый тип' })
       const typed = items.filter((x) => !type || x.movie.media_type === type)
+      const fixture = new URL(
+        req.headers.referer || 'http://localhost',
+      ).searchParams.get('fixture')
+      const selectedDirectors = (url.searchParams.get('director_ids') || '')
+        .split(',')
+        .filter(Boolean)
+        .map(Number)
+      const directed = typed.filter(
+        (x) =>
+          !selectedDirectors.length ||
+          x.movie.directors?.some((d) => selectedDirectors.includes(d.id)),
+      )
+      if (p === '/api/v1/directors' || /^\/api\/v1\/directors\/\d+$/.test(p)) {
+        if (fixture === 'error')
+          return send(res, 503, { message: 'Не удалось загрузить режиссёров' })
+        const stats = directors
+          .filter((d) =>
+            items.some((x) =>
+              x.movie.directors?.some((person) => person.id === d.id),
+            ),
+          )
+          .map((d) => {
+            const works = typed.filter((x) =>
+              x.movie.directors?.some((person) => person.id === d.id),
+            )
+            const rated = works.filter(
+              (x) => x.status === 'watched' && x.user_rating,
+            )
+            return {
+              ...d,
+              total_count: works.length,
+              want_to_watch_count: works.filter(
+                (x) => x.status === 'want_to_watch',
+              ).length,
+              watched_count: works.filter((x) => x.status === 'watched').length,
+              rated_count: rated.length,
+              average_user_rating: rated.length
+                ? Math.round(
+                    (rated.reduce((a, x) => a + x.user_rating, 0) /
+                      rated.length) *
+                      10,
+                  ) / 10
+                : null,
+            }
+          })
+        if (p !== '/api/v1/directors') {
+          const d = stats.find((d) => d.id === Number(p.split('/').at(-1)))
+          return d && fixture !== 'empty'
+            ? send(res, 200, d)
+            : send(res, 404, {
+                code: 'director_not_found',
+                message: 'Режиссёр не найден в коллекции',
+              })
+        }
+        const q = (url.searchParams.get('q') || '').toLowerCase()
+        let found =
+          fixture === 'empty'
+            ? []
+            : stats.filter(
+                (d) =>
+                  d.total_count > 0 &&
+                  `${d.name} ${d.original_name}`.toLowerCase().includes(q),
+              )
+        const sort = url.searchParams.get('sort') || 'name',
+          direction = url.searchParams.get('order') === 'desc' ? -1 : 1
+        found.sort((a, b) =>
+          sort === 'name'
+            ? direction * a.name.localeCompare(b.name, 'ru')
+            : sort === 'work_count'
+              ? direction * (a.total_count - b.total_count)
+              : a.average_user_rating == null
+                ? 1
+                : b.average_user_rating == null
+                  ? -1
+                  : direction * (a.average_user_rating - b.average_user_rating),
+        )
+        const offset = Number(url.searchParams.get('offset') || 0),
+          limit = Number(url.searchParams.get('limit') || 50)
+        return send(res, 200, {
+          items: found.slice(offset, offset + limit),
+          total: found.length,
+          limit,
+          offset,
+        })
+      }
       if (p === '/api/v1/me') {
         const fixture = new URL(
           req.headers.referer || 'http://localhost',
@@ -135,12 +244,12 @@ http
             ? genres
                 .map((g) => ({
                   ...g,
-                  want_to_watch_count: typed.filter(
+                  want_to_watch_count: directed.filter(
                     (x) =>
                       x.status === 'want_to_watch' &&
                       x.movie.genres.some((y) => y.id === g.id),
                   ).length,
-                  watched_count: typed.filter(
+                  watched_count: directed.filter(
                     (x) =>
                       x.status === 'watched' &&
                       x.movie.genres.some((y) => y.id === g.id),
@@ -160,7 +269,7 @@ http
             code: 'test',
             message: 'Не удалось загрузить коллекцию',
           })
-        const filtered = typed.filter(
+        const filtered = directed.filter(
           (x) =>
             (!url.searchParams.get('status') ||
               x.status === url.searchParams.get('status')) &&
@@ -244,7 +353,11 @@ http
               x.external_id === +cm[3],
           )
           return c
-            ? send(res, 200, { ...c, id: 0 })
+            ? send(res, 200, {
+                ...c,
+                id: 0,
+                directors: c.directors?.map(({ id, ...d }) => d),
+              })
             : send(res, 400, { message: 'Кандидат не относится к задаче' })
         }
         if (jm[2] === '/reject') {

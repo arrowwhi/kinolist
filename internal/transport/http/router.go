@@ -57,6 +57,8 @@ func NewRouter(d RouterDeps) http.Handler {
 		api.Get("/me", d.Movies.Me)
 		api.Get("/statistics", d.Movies.Statistics)
 		api.Get("/genres", d.Movies.Genres)
+		api.Get("/directors", d.Movies.ListDirectors)
+		api.Get("/directors/{id}", d.Movies.GetDirector)
 
 		api.Route("/movies", func(m chi.Router) {
 			m.Get("/", d.Movies.List)

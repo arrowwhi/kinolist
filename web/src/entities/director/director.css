@@ -1,0 +1,66 @@
+.director-card {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.director-card > strong {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.director-card > span {
+  overflow-wrap: anywhere;
+}
+.director-credits__names {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.director-credits__names button,
+.director-credits__toggle {
+  color: var(--color-accent);
+  padding: 4px 0;
+  text-align: left;
+  min-height: 36px;
+}
+[data-theme='light'] .director-credits__names button,
+[data-theme='light'] .director-credits__toggle {
+  color: var(--color-on-accent);
+}
+.director-credits__toggle {
+  align-self: flex-start;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.director-picker__list {
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.director-picker__option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 8px 0;
+}
+.director-picker__option input {
+  accent-color: var(--color-accent);
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.director-picker__option > span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}

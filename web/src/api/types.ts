@@ -7,7 +7,31 @@ export interface Genre {
   name_en: string
 }
 
+export interface Director {
+  id?: number
+  tmdb_id?: number
+  kinopoisk_id?: number
+  name: string
+  original_name: string
+}
+export interface DirectorStats extends Director {
+  id: number
+  total_count: number
+  want_to_watch_count: number
+  watched_count: number
+  rated_count: number
+  average_user_rating: number | null
+}
+export interface DirectorList {
+  items: DirectorStats[]
+  total: number
+  limit: number
+  offset: number
+}
+export type DirectorSelection = Pick<DirectorStats, 'id' | 'name'>
+
 export interface Movie {
+  directors?: Director[]
   media_type?: MediaType
   season_count?: number | null
   id: number
@@ -51,6 +75,7 @@ export interface MovieList {
 }
 
 export interface Candidate {
+  directors?: Director[]
   media_type?: MediaType
   season_count?: number | null
   original_title?: string

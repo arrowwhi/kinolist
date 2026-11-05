@@ -15,21 +15,22 @@ type Genre struct {
 }
 
 type Movie struct {
-	MediaType       string  `json:"media_type"`
-	SeasonCount     *int16  `json:"season_count"`
-	ID              int64   `json:"id"`
-	TMDBID          int32   `json:"tmdb_id,omitempty"`
-	KinopoiskID     int32   `json:"kinopoisk_id,omitempty"`
-	Title           string  `json:"title"`
-	OriginalTitle   string  `json:"original_title,omitempty"`
-	Year            int16   `json:"year,omitempty"`
-	Overview        string  `json:"overview"`
-	PosterURL       string  `json:"poster_url,omitempty"`
-	RuntimeMin      int16   `json:"runtime_min,omitempty"`
-	RatingProvider  string  `json:"rating_provider,omitempty"`
-	RatingVoteCount *int32  `json:"rating_vote_count"`
-	Rating          float32 `json:"rating,omitempty"`
-	Genres          []Genre `json:"genres"`
+	MediaType       string     `json:"media_type"`
+	SeasonCount     *int16     `json:"season_count"`
+	ID              int64      `json:"id"`
+	TMDBID          int32      `json:"tmdb_id,omitempty"`
+	KinopoiskID     int32      `json:"kinopoisk_id,omitempty"`
+	Title           string     `json:"title"`
+	OriginalTitle   string     `json:"original_title,omitempty"`
+	Year            int16      `json:"year,omitempty"`
+	Overview        string     `json:"overview"`
+	PosterURL       string     `json:"poster_url,omitempty"`
+	RuntimeMin      int16      `json:"runtime_min,omitempty"`
+	RatingProvider  string     `json:"rating_provider,omitempty"`
+	RatingVoteCount *int32     `json:"rating_vote_count"`
+	Rating          float32    `json:"rating,omitempty"`
+	Genres          []Genre    `json:"genres"`
+	Directors       []Director `json:"directors"`
 }
 
 type UserMovie struct {
@@ -71,20 +72,21 @@ type CreateJobRequest struct {
 }
 
 type Candidate struct {
-	MediaType       string  `json:"media_type"`
-	SeasonCount     *int16  `json:"season_count"`
-	OriginalTitle   string  `json:"original_title,omitempty"`
-	RuntimeMin      int16   `json:"runtime_min,omitempty"`
-	RatingProvider  string  `json:"rating_provider,omitempty"`
-	RatingVoteCount *int32  `json:"rating_vote_count"`
-	Genres          []Genre `json:"genres"`
-	Provider        string  `json:"provider"`
-	ExternalID      int32   `json:"external_id"`
-	Title           string  `json:"title"`
-	Year            int16   `json:"year,omitempty"`
-	Overview        string  `json:"overview"`
-	PosterURL       string  `json:"poster_url,omitempty"`
-	Rating          float32 `json:"rating,omitempty"`
+	MediaType       string     `json:"media_type"`
+	SeasonCount     *int16     `json:"season_count"`
+	OriginalTitle   string     `json:"original_title,omitempty"`
+	RuntimeMin      int16      `json:"runtime_min,omitempty"`
+	RatingProvider  string     `json:"rating_provider,omitempty"`
+	RatingVoteCount *int32     `json:"rating_vote_count"`
+	Genres          []Genre    `json:"genres"`
+	Directors       []Director `json:"directors"`
+	Provider        string     `json:"provider"`
+	ExternalID      int32      `json:"external_id"`
+	Title           string     `json:"title"`
+	Year            int16      `json:"year,omitempty"`
+	Overview        string     `json:"overview"`
+	PosterURL       string     `json:"poster_url,omitempty"`
+	Rating          float32    `json:"rating,omitempty"`
 }
 
 type Job struct {
@@ -129,4 +131,27 @@ type Statistics struct {
 	TotalCount       int `json:"total_count"`
 	WantToWatchCount int `json:"want_to_watch_count"`
 	WatchedCount     int `json:"watched_count"`
+}
+
+// Preview identities have external IDs; an internal ID is assigned on confirmation.
+type Director struct {
+	ID           int64  `json:"id,omitempty"`
+	TMDBID       int32  `json:"tmdb_id,omitempty"`
+	KinopoiskID  int32  `json:"kinopoisk_id,omitempty"`
+	Name         string `json:"name"`
+	OriginalName string `json:"original_name"`
+}
+type DirectorStats struct {
+	Director
+	TotalCount        int      `json:"total_count"`
+	WantToWatchCount  int      `json:"want_to_watch_count"`
+	WatchedCount      int      `json:"watched_count"`
+	RatedCount        int      `json:"rated_count"`
+	AverageUserRating *float64 `json:"average_user_rating"`
+}
+type DirectorList struct {
+	Items  []DirectorStats `json:"items"`
+	Total  int             `json:"total"`
+	Limit  int             `json:"limit"`
+	Offset int             `json:"offset"`
 }

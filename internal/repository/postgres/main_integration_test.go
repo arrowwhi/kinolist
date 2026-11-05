@@ -93,7 +93,7 @@ func newManager(t *testing.T) *transactions.Manager {
 func truncate(t *testing.T) {
 	t.Helper()
 	_, err := testPool.Exec(context.Background(),
-		`TRUNCATE bot_sessions, enrichment_jobs, user_movies, movie_genres, movies, users, catalog_cache
+		`TRUNCATE directors, movie_directors, bot_sessions, enrichment_jobs, user_movies, movie_genres, movies, users, catalog_cache
 		 RESTART IDENTITY CASCADE`)
 	if err != nil {
 		t.Fatalf("truncate: %v", err)

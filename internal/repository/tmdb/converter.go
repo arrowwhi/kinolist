@@ -59,6 +59,8 @@ func (r result) toCandidate() movie.Candidate {
 }
 
 type detailsResponse struct {
+	Credits          *creditsResponse `json:"credits"`
+	AggregateCredits *creditsResponse `json:"aggregate_credits"`
 	result
 	Runtime         int16  `json:"runtime"`
 	NumberOfSeasons *int16 `json:"number_of_seasons"`
@@ -73,6 +75,13 @@ type detailsResponse struct {
 
 func (d detailsResponse) toCandidate() movie.Candidate {
 	c := d.result.toCandidate()
+	credits := d.Credits
+	if c.MediaType == movie.MediaTV {
+		credits = d.AggregateCredits
+	}
+	if credits != nil && credits.Crew != nil {
+		c.Directors, c.DirectorsLoaded = credits.directors(c.MediaType), true
+	}
 	if c.MediaType == movie.MediaTV {
 		// Season zero contains specials, not an ordinary season.
 		if len(d.Seasons) > 0 {
@@ -117,4 +126,46 @@ func parseYear(releaseDate string) int16 {
 		return 0
 	}
 	return int16(y) //nolint:gosec // год фильма из внешнего API не выходит за диапазон int16
+}
+
+// A missing crew array is a partial/error response, not an authoritative empty list.
+type creditsResponse struct {
+	Crew []struct {
+		ID           int32  `json:"id"`
+		Name         string `json:"name"`
+		OriginalName string `json:"original_name"`
+		Job          string `json:"job"`
+		Jobs         []struct {
+			Job string `json:"job"`
+		} `json:"jobs"`
+	} `json:"crew"`
+}
+
+func (c creditsResponse) directors(mt movie.MediaType) []movie.Director {
+	out := make([]movie.Director, 0)
+	seen := map[int32]bool{}
+	for _, person := range c.Crew {
+		isDirector := person.Job == "Director" && mt == movie.MediaMovie
+		if mt == movie.MediaTV {
+			for _, job := range person.Jobs {
+				if job.Job == "Director" {
+					isDirector = true
+				}
+			}
+		}
+		name := strings.TrimSpace(person.Name)
+		original := strings.TrimSpace(person.OriginalName)
+		if name == "" {
+			name = original
+		}
+		if !isDirector || person.ID <= 0 || name == "" || seen[person.ID] {
+			continue
+		}
+		seen[person.ID] = true
+		if original == "" {
+			original = name
+		}
+		out = append(out, movie.Director{TMDBID: person.ID, Name: name, OriginalName: original})
+	}
+	return out
 }

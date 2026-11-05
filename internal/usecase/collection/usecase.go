@@ -18,8 +18,11 @@ type (
 		List(ctx context.Context, f movie.Filter) ([]movie.UserMovie, error)
 		Count(ctx context.Context, f movie.Filter) (int, error)
 		Summary(ctx context.Context, f movie.Filter) (movie.Summary, error)
+		ListDirectors(ctx context.Context, f movie.DirectorFilter) ([]movie.DirectorStats, int, error)
+		GetDirector(ctx context.Context, userID, directorID int64, mediaType movie.MediaType) (movie.DirectorStats, error)
 		Statistics(ctx context.Context, userID int64) (movie.Statistics, error)
 		CollectionGenres(ctx context.Context, userID int64, mediaTypes ...movie.MediaType) ([]movie.GenreStats, error)
+		CollectionGenresFiltered(ctx context.Context, f movie.Filter) ([]movie.GenreStats, error)
 		Update(ctx context.Context, userID, userMovieID int64, upd movie.Update) (movie.UserMovie, error)
 		Delete(ctx context.Context, userID, userMovieID int64) error
 		ListGenres(ctx context.Context) ([]movie.Genre, error)

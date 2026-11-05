@@ -1,8 +1,14 @@
 import type { ListParams } from '../../api/client'
-import type { MediaType, Status, UserMovie } from '../../api/types'
+import type {
+  DirectorSelection,
+  MediaType,
+  Status,
+  UserMovie,
+} from '../../api/types'
 export type CollectionStatus = Status | 'all'
 export type GroupBy = 'date' | 'genre' | 'none'
 export interface CollectionFilters {
+  directors?: DirectorSelection[]
   mediaType?: MediaType
   genreIds: number[]
   sort: NonNullable<ListParams['sort']>

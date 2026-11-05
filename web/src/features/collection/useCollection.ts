@@ -9,6 +9,7 @@ export function useCollection(
   query: string,
   revision: number,
   fixedGenre?: number,
+  fixedDirector?: number,
 ) {
   const summaryKey = JSON.stringify([
     status,
@@ -16,6 +17,8 @@ export function useCollection(
     filters.mediaType,
     revision,
     fixedGenre,
+    fixedDirector,
+    filters.directors,
   ])
   const [summaryState, setSummaryState] = useState<{
     key: string
@@ -38,6 +41,8 @@ export function useCollection(
     query,
     revision,
     fixedGenre,
+    fixedDirector,
+    filters.directors,
     attempt,
   ])
   const params = {
@@ -45,6 +50,9 @@ export function useCollection(
     mediaType: filters.mediaType,
     genreIds: fixedGenre ? [fixedGenre] : filters.genreIds,
     query,
+    directorIds: fixedDirector
+      ? [fixedDirector]
+      : filters.directors?.map((d) => d.id),
     sort: filters.sort,
     order: filters.order,
     limit: 30,

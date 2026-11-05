@@ -1,3 +1,6 @@
+import { DirectorsPage } from '../pages/directors/DirectorsPage'
+import type { DirectorPreferences } from '../pages/directors/DirectorsPage'
+import { DirectorWorksPage } from '../pages/directors/DirectorWorksPage'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type { CollectionStatus } from '../features/collection/model'
@@ -21,6 +24,8 @@ import { defaultFilters } from '../features/collection/model'
 export function App() {
   const { location, navigate, back } = useNavigation()
   const history = useRecentCandidates()
+  const [directorPreferences, setDirectorPreferences] =
+    useState<DirectorPreferences>({ search: '', sort: 'name' })
   const [revision, setRevision] = useState(0)
   const [toast, setToast] = useState('')
   const timer = useRef<number | undefined>(undefined)
@@ -33,6 +38,7 @@ export function App() {
     '/collection/want_to_watch',
     '/collection/watched',
     '/genres',
+    '/directors',
   ].includes(path)
   const goHome = useCallback(() => navigate(home, true), [navigate])
   useTelegramSetup(rootSection ? goHome : back, path !== home)
@@ -45,6 +51,7 @@ export function App() {
   }, [])
   useEffect(() => () => window.clearTimeout(timer.current), [])
   const routeMatch = path.match(/^\/movie\/(\d+)(?:\/(note|rate))?$/)
+  const directorMatch = path.match(/^\/directors\/(\d+)$/)
   const genreMatch = path.match(/^\/genres\/(\d+)$/)
   let content
   if (path === home)
@@ -73,7 +80,45 @@ export function App() {
     content = (
       <GenresPage navigate={navigate} revision={revision} back={goHome} />
     )
-  else if (path === '/filters') {
+  else if (path === '/directors')
+    content = (
+      <DirectorsPage
+        value={directorPreferences}
+        onChange={setDirectorPreferences}
+        revision={revision}
+        navigate={navigate}
+        back={goHome}
+      />
+    )
+  else if (directorMatch && Number(directorMatch[1]) > 0) {
+    const status: CollectionStatus =
+      params.get('status') === 'watched'
+        ? 'watched'
+        : params.get('status') === 'want_to_watch'
+          ? 'want_to_watch'
+          : 'all'
+    const key = `/directors/${directorMatch[1]}?status=${status}`
+    content = (
+      <DirectorWorksPage
+        key={key}
+        id={Number(directorMatch[1])}
+        status={status}
+        genres={catalog.data?.items ?? []}
+        preferences={
+          preferences[key] ?? {
+            filters: { ...defaultFilters(status), groupBy: 'none' },
+            search: '',
+          }
+        }
+        onPreferences={(value) =>
+          setPreferences((previous) => ({ ...previous, [key]: value }))
+        }
+        revision={revision}
+        navigate={navigate}
+        back={back}
+      />
+    )
+  } else if (path === '/filters') {
     const returnTo = params.get('return') || '/collection/want_to_watch'
     const returnPath = returnTo.split('?')[0]
     const returnParams = new URLSearchParams(returnTo.split('?')[1])
@@ -85,7 +130,12 @@ export function App() {
           ? 'all'
           : 'want_to_watch'
     const current = preferences[returnTo] ?? {
-      filters: defaultFilters(status),
+      filters: {
+        ...defaultFilters(status),
+        ...(returnPath.startsWith('/directors/')
+          ? { groupBy: 'none' as const }
+          : {}),
+      },
       search: '',
     }
     const fixedGenre = catalog.data?.items.find(
@@ -106,6 +156,11 @@ export function App() {
         value={current.filters}
         status={status}
         fixedGenre={fixedGenre}
+        fixedDirectorId={
+          returnPath.match(/^\/directors\/(\d+)$/)
+            ? Number(returnPath.split('/')[2])
+            : undefined
+        }
         navigate={navigate}
         back={back}
         onApply={(filters) => {

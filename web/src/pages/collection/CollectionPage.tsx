@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { api } from '../../api/client'
 import { useResource } from '../../shared/hooks/useResource'
 import { contentCount, mediaFilterLabel } from '../../entities/movie/metadata'
-import type { Genre } from '../../api/types'
+import type { DirectorStats, Genre } from '../../api/types'
 import type { Navigate } from '../../shared/lib/navigation'
 import { Shell } from '../../widgets/app-shell/Shell'
 import { Button } from '../../shared/ui/Button'
@@ -25,6 +25,7 @@ export interface CollectionPreferences {
 export function CollectionPage({
   status,
   genre,
+  director,
   genres,
   preferences,
   onPreferences,
@@ -34,6 +35,7 @@ export function CollectionPage({
 }: {
   status: CollectionStatus
   genre?: Genre
+  director?: DirectorStats
   genres: Genre[]
   preferences: CollectionPreferences
   onPreferences: (value: CollectionPreferences) => void
@@ -42,22 +44,35 @@ export function CollectionPage({
   back: () => void
 }) {
   const { filters, search } = preferences
+  const directorIds = director
+    ? [director.id]
+    : filters.directors?.map((d) => d.id)
+  const scoped = Boolean(genre || director)
   const genreResource = useResource(
-    (signal) => api.collectionGenres(signal, filters.mediaType),
-    `${revision}:${filters.mediaType ?? 'all'}`,
+    (signal) => api.collectionGenres(signal, filters.mediaType, directorIds),
+    JSON.stringify([revision, filters.mediaType, directorIds]),
   )
   const genreStats = genreResource.data?.items ?? []
   const query = useDebounced(search)
-  const collection = useCollection(status, filters, query, revision, genre?.id)
+  const collection = useCollection(
+    status,
+    filters,
+    query,
+    revision,
+    genre?.id,
+    director?.id,
+  )
   const { page, summary, loading, error } = collection
   const groups = useMemo(
     () => groupMovies(page?.items ?? [], filters.groupBy, status),
     [page, filters.groupBy, status],
   )
   const watched = status === 'watched'
-  const scope = genre
-    ? `/genres/${genre.id}?status=${status}`
-    : `/collection/${status}`
+  const scope = director
+    ? `/directors/${director.id}?status=${status}`
+    : genre
+      ? `/genres/${genre.id}?status=${status}`
+      : `/collection/${status}`
   const openFilters = () =>
     navigate(`/filters?return=${encodeURIComponent(scope)}`)
   const chooseGenre = (id: number | null) =>
@@ -72,7 +87,7 @@ export function CollectionPage({
         ? g.watched_count > 0
         : g.want_to_watch_count > 0,
   )
-  const filterLabel =
+  const genreLabel =
     genre?.name_ru ??
     (filters.genreIds.length
       ? genres
@@ -80,19 +95,48 @@ export function CollectionPage({
           .map((g) => g.name_ru)
           .join(', ')
       : 'все жанры')
+  const filterLabel = [
+    genreLabel,
+    !director && filters.directors?.length
+      ? filters.directors.map((d) => d.name).join(', ')
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  const statusPath = (value: CollectionStatus) =>
+    `${director ? `/directors/${director.id}` : `/genres/${genre?.id}`}?status=${value}`
+  const hasFilters = Boolean(
+    filters.genreIds.length ||
+    filters.mediaType ||
+    (!director && filters.directors?.length),
+  )
   return (
     <Shell
-      title={genre?.name_ru ?? (watched ? 'Просмотрено' : 'На потом')}
+      title={
+        director?.name ??
+        genre?.name_ru ??
+        (watched ? 'Просмотрено' : 'На потом')
+      }
       subtitle={
-        genre
-          ? `Коллекция жанра «${genre.name_ru}»`
-          : watched
-            ? 'Истории, которые остались с тобой.'
-            : 'Твоя следующая хорошая история.'
+        director
+          ? 'Фильмы и сериалы из твоей коллекции.'
+          : genre
+            ? `Коллекция жанра «${genre.name_ru}»`
+            : watched
+              ? 'Истории, которые остались с тобой.'
+              : 'Твоя следующая хорошая история.'
       }
       navigate={navigate}
       onBack={back}
-      tab={genre ? 'genres' : status === 'all' ? 'want_to_watch' : status}
+      tab={
+        director
+          ? undefined
+          : genre
+            ? 'genres'
+            : status === 'all'
+              ? 'want_to_watch'
+              : status
+      }
       actions={
         !watched ? (
           <Button onClick={() => navigate('/add')}>＋ Добавить</Button>
@@ -102,25 +146,23 @@ export function CollectionPage({
       <Button variant="secondary" onClick={openFilters}>
         Фильтры и сортировка
       </Button>
-      {genre ? (
+      {scoped ? (
         <div className="chips">
           <Chip
             active={status === 'want_to_watch'}
-            onClick={() =>
-              navigate(`/genres/${genre.id}?status=want_to_watch`, true)
-            }
+            onClick={() => navigate(statusPath('want_to_watch'), true)}
           >
             На потом
           </Chip>
           <Chip
             active={watched}
-            onClick={() => navigate(`/genres/${genre.id}?status=watched`, true)}
+            onClick={() => navigate(statusPath('watched'), true)}
           >
             Просмотрено
           </Chip>
           <Chip
             active={status === 'all'}
-            onClick={() => navigate(`/genres/${genre.id}?status=all`, true)}
+            onClick={() => navigate(statusPath('all'), true)}
           >
             Все
           </Chip>
@@ -177,14 +219,15 @@ export function CollectionPage({
           ))}
         </div>
       )}
-      {watched && summary && (
+      {(watched || director) && summary && (
         <CollectionStats
           summary={summary}
           filterLabel={filterLabel}
           mediaType={filters.mediaType}
+          showRatedCount={Boolean(director)}
         />
       )}
-      {!watched && (
+      {!watched && !director && (
         <p className="muted small collection-caption" aria-live="polite">
           По фильтрам · {mediaFilterLabel(filters.mediaType)} · {filterLabel}
           {summary
@@ -194,9 +237,15 @@ export function CollectionPage({
       )}
       <Field
         type="search"
-        aria-label="Поиск в коллекции"
+        aria-label={
+          director ? 'Поиск среди работ режиссёра' : 'Поиск в коллекции'
+        }
         placeholder={
-          watched ? 'Поиск среди просмотренных' : 'Поиск в коллекции'
+          director
+            ? 'Поиск среди работ режиссёра'
+            : watched
+              ? 'Поиск среди просмотренных'
+              : 'Поиск в коллекции'
         }
         value={search}
         onChange={(e) =>
@@ -219,21 +268,26 @@ export function CollectionPage({
           description={
             query
               ? 'Попробуй другое название или измени фильтры.'
-              : filters.genreIds.length || filters.mediaType || genre
+              : hasFilters || scoped
                 ? 'По выбранным фильтрам пока ничего нет.'
                 : watched
                   ? 'Отметь фильм или сериал просмотренным — он появится здесь.'
                   : 'Добавь фильм или сериал по названию или ссылке на рилс.'
           }
           action={
-            query || filters.genreIds.length || filters.mediaType
+            query || hasFilters
               ? 'Сбросить поиск и фильтры'
               : 'Добавить в коллекцию'
           }
           onAction={() =>
-            query || filters.genreIds.length || filters.mediaType
+            query || hasFilters
               ? onPreferences({
-                  filters: { ...filters, genreIds: [], mediaType: undefined },
+                  filters: {
+                    ...filters,
+                    genreIds: [],
+                    directors: [],
+                    mediaType: undefined,
+                  },
                   search: '',
                 })
               : navigate('/add')
