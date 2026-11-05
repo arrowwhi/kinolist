@@ -17,6 +17,8 @@ type (
 		Get(ctx context.Context, userID, userMovieID int64) (movie.UserMovie, error)
 		List(ctx context.Context, f movie.Filter) ([]movie.UserMovie, error)
 		Count(ctx context.Context, f movie.Filter) (int, error)
+		Summary(ctx context.Context, f movie.Filter) (movie.Summary, error)
+		CollectionGenres(ctx context.Context, userID int64) ([]movie.GenreStats, error)
 		Update(ctx context.Context, userID, userMovieID int64, upd movie.Update) (movie.UserMovie, error)
 		Delete(ctx context.Context, userID, userMovieID int64) error
 		ListGenres(ctx context.Context) ([]movie.Genre, error)
@@ -39,10 +41,11 @@ func New(movies movieRepository, users userRepository) *UseCase {
 
 // Page — страница коллекции вместе с общим размером выборки.
 type Page struct {
-	Items  []movie.UserMovie
-	Total  int
-	Limit  int
-	Offset int
+	Items   []movie.UserMovie
+	Total   int
+	Limit   int
+	Offset  int
+	Summary movie.Summary
 }
 
 func (uc *UseCase) List(ctx context.Context, f movie.Filter) (Page, error) {
@@ -62,7 +65,13 @@ func (uc *UseCase) List(ctx context.Context, f movie.Filter) (Page, error) {
 		return Page{}, fmt.Errorf("count user movies: %w", err)
 	}
 
-	return Page{Items: items, Total: total, Limit: f.Limit, Offset: f.Offset}, nil
+	summaryFilter := f
+	summaryFilter.Query = ""
+	summary, err := uc.movies.Summary(ctx, summaryFilter)
+	if err != nil {
+		return Page{}, fmt.Errorf("get summary: %w", err)
+	}
+	return Page{Items: items, Total: total, Limit: f.Limit, Offset: f.Offset, Summary: summary}, nil
 }
 
 func (uc *UseCase) Get(ctx context.Context, userID, userMovieID int64) (movie.UserMovie, error) {
@@ -117,7 +126,12 @@ func (uc *UseCase) ResolveUser(ctx context.Context, u user.User) (user.User, err
 }
 
 func validateUpdate(upd movie.Update) error {
-	if upd.Status == nil && upd.UserRating == nil && upd.Note == nil {
+	if upd.Review != nil {
+		if err := movie.ValidateReview(*upd.Review); err != nil {
+			return err
+		}
+	}
+	if upd.Status == nil && upd.UserRating == nil && upd.Note == nil && upd.Review == nil {
 		return errors.New("update: nothing to change")
 	}
 	if upd.Status != nil && !upd.Status.Valid() {
@@ -128,4 +142,8 @@ func validateUpdate(upd movie.Update) error {
 		return movie.ErrInvalidRating
 	}
 	return nil
+}
+
+func (uc *UseCase) CollectionGenres(ctx context.Context, userID int64) ([]movie.GenreStats, error) {
+	return uc.movies.CollectionGenres(ctx, userID)
 }

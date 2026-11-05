@@ -1,6 +1,9 @@
 package movie
 
-import "time"
+import (
+	"time"
+	"unicode/utf8"
+)
 
 // Source — откуда фильм попал в коллекцию.
 type Source string
@@ -39,19 +42,21 @@ type Genre struct {
 
 // Movie — карточка фильма в общем каталоге, одна на всех пользователей.
 type Movie struct {
-	ID            int64
-	TMDBID        int32
-	KinopoiskID   int32
-	Title         string
-	OriginalTitle string
-	Year          int16
-	Overview      string
-	PosterPath    string
-	RuntimeMin    int16
-	Rating        float32
-	Genres        []Genre
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID              int64
+	TMDBID          int32
+	KinopoiskID     int32
+	Title           string
+	OriginalTitle   string
+	Year            int16
+	Overview        string
+	PosterPath      string
+	RuntimeMin      int16
+	RatingProvider  Provider
+	RatingVoteCount *int32
+	Rating          float32
+	Genres          []Genre
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 // UserMovie — фильм в коллекции конкретного пользователя.
@@ -61,6 +66,7 @@ type UserMovie struct {
 	Movie      Movie
 	Status     Status
 	UserRating int16
+	Review     string
 	Note       string
 	Source     Source
 	SourceURL  string
@@ -70,32 +76,37 @@ type UserMovie struct {
 
 // Candidate — результат поиска во внешнем каталоге, ещё не сохранённый.
 type Candidate struct {
-	Provider      Provider
-	ExternalID    int32
-	Title         string
-	OriginalTitle string
-	Year          int16
-	Overview      string
-	PosterPath    string
-	Popularity    float32
-	Rating        float32
-	GenreTMDBIDs  []int32
-	GenreNames    []string
+	Provider        Provider
+	ExternalID      int32
+	Title           string
+	OriginalTitle   string
+	Year            int16
+	Overview        string
+	PosterPath      string
+	RuntimeMin      int16
+	Popularity      float32
+	RatingProvider  Provider
+	RatingVoteCount *int32
+	Rating          float32
+	GenreTMDBIDs    []int32
+	GenreNames      []string
 }
 
 // SortBy — порядок выдачи коллекции.
 type SortBy string
 
 const (
-	SortByAddedAt SortBy = "added_at"
-	SortByTitle   SortBy = "title"
-	SortByYear    SortBy = "year"
-	SortByRating  SortBy = "rating"
+	SortByAddedAt    SortBy = "added_at"
+	SortByTitle      SortBy = "title"
+	SortByYear       SortBy = "year"
+	SortByRating     SortBy = "rating"
+	SortByUserRating SortBy = "user_rating"
+	SortByWatchedAt  SortBy = "watched_at"
 )
 
 func (s SortBy) Valid() bool {
 	switch s {
-	case SortByAddedAt, SortByTitle, SortByYear, SortByRating:
+	case SortByAddedAt, SortByTitle, SortByYear, SortByRating, SortByUserRating, SortByWatchedAt:
 		return true
 	default:
 		return false
@@ -141,6 +152,7 @@ func (f Filter) Normalize() Filter {
 type Update struct {
 	Status     *Status
 	UserRating *int16
+	Review     *string
 	Note       *string
 }
 
@@ -148,3 +160,46 @@ const (
 	MinUserRating = 1
 	MaxUserRating = 10
 )
+
+// Summary ignores search and pagination; ratings only include watched films.
+type Summary struct {
+	MovieCount        int
+	RatedCount        int
+	AverageUserRating *float64
+}
+type GenreStats struct {
+	Genre
+	WantToWatchCount int
+	WatchedCount     int
+}
+type ConfirmOptions struct {
+	Status     Status
+	UserRating int16
+	Note       string
+	Review     string
+}
+
+const MaxReviewLength = 5000
+
+func ValidateReview(review string) error {
+	if utf8.RuneCountInString(review) > MaxReviewLength {
+		return ErrReviewTooLong
+	}
+	return nil
+}
+
+func (o ConfirmOptions) Validate() error {
+	if o.Status != "" && !o.Status.Valid() {
+		return ErrInvalidStatus
+	}
+	if o.UserRating != 0 && (o.UserRating < MinUserRating || o.UserRating > MaxUserRating) {
+		return ErrInvalidRating
+	}
+	return ValidateReview(o.Review)
+}
+
+// AlreadyInCollectionError preserves the domain sentinel and identifies the existing entry.
+type AlreadyInCollectionError struct{ UserMovieID int64 }
+
+func (e *AlreadyInCollectionError) Error() string { return ErrAlreadyInCollection.Error() }
+func (e *AlreadyInCollectionError) Unwrap() error { return ErrAlreadyInCollection }

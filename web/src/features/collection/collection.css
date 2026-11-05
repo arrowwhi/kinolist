@@ -1,0 +1,43 @@
+.stats-block {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1.6fr;
+  gap: 16px;
+  align-items: center;
+  min-height: 78px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font-size: 17px;
+  font-weight: 600;
+}
+.stats > span:first-child {
+  max-width: 100px;
+}
+.stats small {
+  display: block;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.movie-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.movie-group {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.section-label {
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 600;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1px;
+}

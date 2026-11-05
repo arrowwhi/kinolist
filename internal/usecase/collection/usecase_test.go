@@ -79,6 +79,8 @@ func TestListNormalizesFilter(t *testing.T) {
 					return 1, nil
 				})
 
+			movies.EXPECT().Summary(gomock.Any(), gomock.Any()).Return(movie.Summary{MovieCount: 1}, nil)
+
 			page, err := uc.List(context.Background(), tt.in)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)

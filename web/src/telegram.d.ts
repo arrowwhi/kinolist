@@ -18,6 +18,12 @@ interface TelegramHapticFeedback {
 }
 
 interface TelegramWebApp {
+  BackButton?: {
+    show(): void
+    hide(): void
+    onClick(handler: () => void): void
+    offClick(handler: () => void): void
+  }
   initData: string
   colorScheme: 'light' | 'dark'
   themeParams: TelegramThemeParams
