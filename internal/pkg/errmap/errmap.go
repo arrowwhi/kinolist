@@ -49,14 +49,14 @@ var table = []entry{
 	{movie.ErrEmptyQuery, Response{http.StatusBadRequest, "empty_query", "Пустой поисковый запрос"}},
 	{movie.ErrNoCandidates, Response{http.StatusNotFound, "no_candidates", "Ничего не нашлось по этому названию"}},
 	{enrichment.ErrEmptyInput, Response{http.StatusBadRequest, "empty_input", "Пустой запрос"}},
-	{enrichment.ErrInvalidReelURL, Response{http.StatusBadRequest, "invalid_reel_url", "Это не ссылка на рилс Instagram"}},
+	{enrichment.ErrInvalidReelURL, Response{http.StatusBadRequest, "invalid_reel_url", "Не удалось обработать запрос. Напишите название фильма или сериала."}},
 	{enrichment.ErrCandidateNotInJob, Response{http.StatusBadRequest, "candidate_not_in_job", "Этот вариант не относится к задаче"}},
 	{enrichment.ErrTitleNotRecognized, Response{http.StatusUnprocessableEntity, "title_not_recognized", "Не удалось распознать название фильма"}},
 	{user.ErrInvalidTelegram, Response{http.StatusUnauthorized, "invalid_telegram", "Недействительные данные Telegram"}},
 
 	{enrichment.ErrFetcherDisabled, Response{http.StatusServiceUnavailable, "fetcher_disabled", "Разбор ссылок сейчас недоступен, пришлите название текстом"}},
 	{enrichment.ErrExtractorDisabled, Response{http.StatusServiceUnavailable, "extractor_disabled", "Распознавание названий сейчас недоступно, пришлите название текстом"}},
-	{enrichment.ErrReelUnavailable, Response{http.StatusBadGateway, "reel_unavailable", "Не удалось получить содержимое рилса"}},
+	{enrichment.ErrReelUnavailable, Response{http.StatusBadGateway, "reel_unavailable", "Не удалось обработать запрос. Попробуйте добавить по названию."}},
 	{movie.ErrProviderUnavailable, Response{http.StatusBadGateway, "catalog_unavailable", "Кинобаза временно недоступна"}},
 }
 

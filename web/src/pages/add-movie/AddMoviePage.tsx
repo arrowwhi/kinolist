@@ -78,7 +78,9 @@ export function AddMoviePage({
     try {
       flow.setInput(await navigator.clipboard.readText())
     } catch {
-      flow.setError('Не удалось прочитать буфер. Вставь ссылку в поле вручную.')
+      flow.setError(
+        'Не удалось прочитать буфер. Введи название в поле вручную.',
+      )
     }
   }
   return (
@@ -123,7 +125,7 @@ export function AddMoviePage({
               посмотри, когда захочется.
             </p>
             <Field
-              label="Название или ссылка"
+              label="Название фильма или сериала"
               placeholder="Например, «Идеальные дни»"
               value={flow.input}
               onChange={(e) => flow.setInput(e.target.value)}
@@ -137,11 +139,11 @@ export function AddMoviePage({
               onClick={() => void paste()}
               disabled={flow.busy}
             >
-              Вставить ссылку
+              Вставить название
             </Button>
             <p className="muted small">
-              Введи название фильма или сериала. Можно прислать ссылку на
-              Instagram Reels.
+              Введи название фильма или сериала. Можно добавить год выхода,
+              чтобы точнее найти нужную историю.
             </p>
             <InlineError message={flow.error} />
             <Button
@@ -232,11 +234,7 @@ export function AddMoviePage({
         <div className="stack">
           <div className="search-progress">
             <span className="spinner spinner--large" />
-            <h2>
-              {flow.job.kind === 'reel'
-                ? 'Распознаём название из рилса'
-                : 'Ищем фильмы и сериалы'}
-            </h2>
+            <h2>Ищем фильмы и сериалы</h2>
             <p className="muted">Обычно это занимает несколько секунд.</p>
           </div>
           <InlineError message={flow.error} />
