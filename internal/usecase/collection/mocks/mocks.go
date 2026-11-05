@@ -136,6 +136,21 @@ func (mr *MockmovieRepositoryMockRecorder) ListGenres(ctx any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListGenres", reflect.TypeOf((*MockmovieRepository)(nil).ListGenres), ctx)
 }
 
+// Statistics mocks base method.
+func (m *MockmovieRepository) Statistics(ctx context.Context, userID int64) (movie.Statistics, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Statistics", ctx, userID)
+	ret0, _ := ret[0].(movie.Statistics)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Statistics indicates an expected call of Statistics.
+func (mr *MockmovieRepositoryMockRecorder) Statistics(ctx, userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Statistics", reflect.TypeOf((*MockmovieRepository)(nil).Statistics), ctx, userID)
+}
+
 // Summary mocks base method.
 func (m *MockmovieRepository) Summary(ctx context.Context, f movie.Filter) (movie.Summary, error) {
 	m.ctrl.T.Helper()

@@ -18,6 +18,7 @@ type (
 		List(ctx context.Context, f movie.Filter) ([]movie.UserMovie, error)
 		Count(ctx context.Context, f movie.Filter) (int, error)
 		Summary(ctx context.Context, f movie.Filter) (movie.Summary, error)
+		Statistics(ctx context.Context, userID int64) (movie.Statistics, error)
 		CollectionGenres(ctx context.Context, userID int64, mediaTypes ...movie.MediaType) ([]movie.GenreStats, error)
 		Update(ctx context.Context, userID, userMovieID int64, upd movie.Update) (movie.UserMovie, error)
 		Delete(ctx context.Context, userID, userMovieID int64) error
@@ -152,4 +153,12 @@ func (uc *UseCase) CollectionGenres(ctx context.Context, userID int64, mediaType
 		return nil, movie.ErrInvalidMediaType
 	}
 	return uc.movies.CollectionGenres(ctx, userID, mediaTypes...)
+}
+
+func (uc *UseCase) Statistics(ctx context.Context, userID int64) (movie.Statistics, error) {
+	stats, err := uc.movies.Statistics(ctx, userID)
+	if err != nil {
+		return movie.Statistics{}, fmt.Errorf("get collection statistics: %w", err)
+	}
+	return stats, nil
 }

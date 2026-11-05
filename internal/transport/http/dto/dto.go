@@ -124,3 +124,9 @@ type GenreStats struct {
 	WantToWatchCount int `json:"want_to_watch_count"`
 	WatchedCount     int `json:"watched_count"`
 }
+
+type Statistics struct {
+	TotalCount       int `json:"total_count"`
+	WantToWatchCount int `json:"want_to_watch_count"`
+	WatchedCount     int `json:"watched_count"`
+}

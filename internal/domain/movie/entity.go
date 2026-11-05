@@ -236,3 +236,11 @@ type AlreadyInCollectionError struct{ UserMovieID int64 }
 
 func (e *AlreadyInCollectionError) Error() string { return ErrAlreadyInCollection.Error() }
 func (e *AlreadyInCollectionError) Unwrap() error { return ErrAlreadyInCollection }
+
+// Statistics describes the complete user collection, independent of list filters.
+// A series counts as one entry regardless of its number of seasons.
+type Statistics struct {
+	TotalCount       int
+	WantToWatchCount int
+	WatchedCount     int
+}

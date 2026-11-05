@@ -6,9 +6,11 @@ import { EmptyState, ErrorState, SkeletonList } from '../../shared/ui/Feedback'
 export function GenresPage({
   navigate,
   revision,
+  back,
 }: {
   navigate: Navigate
   revision: number
+  back: () => void
 }) {
   const { data, error, loading, retry } = useResource(
     (signal) => api.collectionGenres(signal),
@@ -20,6 +22,7 @@ export function GenresPage({
       subtitle="Выбирай кино под настроение."
       navigate={navigate}
       tab="genres"
+      onBack={back}
     >
       {loading ? (
         <SkeletonList />

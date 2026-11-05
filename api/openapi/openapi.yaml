@@ -28,6 +28,22 @@ paths:
               schema: { $ref: '#/components/schemas/Me' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
+  /statistics:
+    get:
+      summary: Общая статистика коллекции для главной страницы
+      description: |
+        Все фильмы и сериалы текущего пользователя, без фильтров и поиска.
+        Сериал считается одной записью независимо от числа сезонов.
+        total_count = want_to_watch_count + watched_count.
+        Пустая коллекция возвращает нули. Параметры запроса не учитываются.
+      responses:
+        '200':
+          description: Счётчики всей коллекции
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Statistics' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
   /genres:
     get:
       summary: Справочник жанров или сводка коллекции
@@ -420,6 +436,14 @@ components:
         user_rating: { type: integer, minimum: 0, maximum: 10, default: 0 }
         note: { type: string }
         review: { type: string, maxLength: 5000 }
+
+    Statistics:
+      type: object
+      required: [total_count, want_to_watch_count, watched_count]
+      properties:
+        total_count: { type: integer, minimum: 0, example: 42 }
+        want_to_watch_count: { type: integer, minimum: 0, example: 24 }
+        watched_count: { type: integer, minimum: 0, example: 18 }
 
     CollectionSummary:
       type: object

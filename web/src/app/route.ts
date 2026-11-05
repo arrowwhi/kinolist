@@ -1,4 +1,4 @@
-export const home = '/collection/want_to_watch'
+export const home = '/'
 
 // Telegram launch parameters occupy the hash too. They are not app routes;
 // leave the URL intact so the Telegram SDK can still read its launch data.

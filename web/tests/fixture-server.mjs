@@ -96,6 +96,39 @@ http
       if (type && !['movie', 'tv'].includes(type))
         return send(res, 400, { message: 'Недопустимый тип' })
       const typed = items.filter((x) => !type || x.movie.media_type === type)
+      if (p === '/api/v1/me') {
+        const fixture = new URL(
+          req.headers.referer || 'http://localhost',
+        ).searchParams.get('fixture')
+        return send(res, 200, {
+          id: 1,
+          first_name: fixture === 'empty' ? '' : 'Иван',
+        })
+      }
+      if (p === '/api/v1/statistics') {
+        const fixture = new URL(
+          req.headers.referer || 'http://localhost',
+        ).searchParams.get('fixture')
+        if (fixture === 'error')
+          return send(res, 503, {
+            code: 'test',
+            message: 'Не удалось загрузить статистику',
+          })
+        return send(
+          res,
+          200,
+          fixture === 'empty'
+            ? { total_count: 0, want_to_watch_count: 0, watched_count: 0 }
+            : {
+                total_count: items.length,
+                want_to_watch_count: items.filter(
+                  (x) => x.status === 'want_to_watch',
+                ).length,
+                watched_count: items.filter((x) => x.status === 'watched')
+                  .length,
+              },
+        )
+      }
       if (p === '/api/v1/genres')
         return send(res, 200, {
           items: url.searchParams.has('scope')

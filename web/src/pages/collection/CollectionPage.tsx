@@ -91,7 +91,7 @@ export function CollectionPage({
             : 'Твоя следующая хорошая история.'
       }
       navigate={navigate}
-      onBack={genre ? back : undefined}
+      onBack={back}
       tab={genre ? 'genres' : status === 'all' ? 'want_to_watch' : status}
       actions={
         !watched ? (

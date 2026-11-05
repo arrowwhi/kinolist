@@ -13,6 +13,7 @@ type Repository interface {
 	List(ctx context.Context, f Filter) ([]UserMovie, error)
 	Count(ctx context.Context, f Filter) (int, error)
 	Summary(ctx context.Context, f Filter) (Summary, error)
+	Statistics(ctx context.Context, userID int64) (Statistics, error)
 	CollectionGenres(ctx context.Context, userID int64, mediaTypes ...MediaType) ([]GenreStats, error)
 	Update(ctx context.Context, userID, userMovieID int64, upd Update) (UserMovie, error)
 	Delete(ctx context.Context, userID, userMovieID int64) error

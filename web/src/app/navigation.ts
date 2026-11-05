@@ -16,7 +16,9 @@ export function useNavigation() {
   }, [])
   const navigate: Navigate = useCallback((path, replace = false) => {
     const depth = Number(window.history.state?.kinolistDepth ?? 0)
-    const state = { kinolistDepth: replace ? depth : depth + 1 }
+    const state = {
+      kinolistDepth: path === home ? 0 : replace ? depth : depth + 1,
+    }
     window.history[replace ? 'replaceState' : 'pushState'](
       state,
       '',

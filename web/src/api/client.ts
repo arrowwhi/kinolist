@@ -5,6 +5,8 @@ import type {
   GenreStats,
   Job,
   Movie,
+  Me,
+  Statistics,
   MovieList,
   MediaType,
   Status,
@@ -49,6 +51,12 @@ export interface ListParams {
   offset?: number
 }
 export const api = {
+  me(signal?: AbortSignal) {
+    return request<Me>('/me', { signal })
+  },
+  statistics(signal?: AbortSignal) {
+    return request<Statistics>('/statistics', { signal, cache: 'no-store' })
+  },
   listMovies(
     params: ListParams = {},
     signal?: AbortSignal,
