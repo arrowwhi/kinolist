@@ -1,3 +1,4 @@
+import { DirectorCredits } from '../director/DirectorCredits'
 import type { Movie } from '../../api/types'
 import { formatRuntime } from '../../shared/lib/format'
 import { movieMetadata } from './metadata'
@@ -28,6 +29,7 @@ export function MoviePreview({ movie }: { movie: Movie }) {
           </span>
         ))}
       </div>
+      <DirectorCredits directors={movie.directors} />
       <p className="muted overview">
         {movie.overview || 'В каталоге пока нет описания.'}
       </p>

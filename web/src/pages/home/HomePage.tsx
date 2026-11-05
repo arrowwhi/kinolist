@@ -47,6 +47,13 @@ export function HomePage({
           to="/genres"
           navigate={navigate}
         />
+        <SectionLink
+          title="Режиссёры"
+          description="Авторы историй в твоей коллекции."
+          action="Выбрать режиссёра"
+          to="/directors"
+          navigate={navigate}
+        />
       </section>
       <Button onClick={() => navigate('/add')}>
         ＋ Добавить фильм или сериал

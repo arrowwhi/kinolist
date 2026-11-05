@@ -1,3 +1,4 @@
+import { DirectorPicker } from '../../features/directors/DirectorPicker'
 import { useState } from 'react'
 import { api } from '../../api/client'
 import { useResource } from '../../shared/hooks/useResource'
@@ -22,6 +23,7 @@ export function FiltersPage({
   navigate,
   back,
   fixedGenre,
+  fixedDirectorId,
 }: {
   genres: Genre[]
   status: CollectionStatus
@@ -30,6 +32,7 @@ export function FiltersPage({
   navigate: Navigate
   back: () => void
   fixedGenre?: Genre
+  fixedDirectorId?: number
 }) {
   const [draft, setDraft] = useState(value)
   const count = useResource(
@@ -39,11 +42,21 @@ export function FiltersPage({
           status: status === 'all' ? undefined : status,
           mediaType: draft.mediaType,
           genreIds: fixedGenre ? [fixedGenre.id] : draft.genreIds,
+          directorIds: fixedDirectorId
+            ? [fixedDirectorId]
+            : draft.directors?.map((d) => d.id),
           limit: 1,
         },
         signal,
       ),
-    JSON.stringify([status, draft.mediaType, fixedGenre?.id, draft.genreIds]),
+    JSON.stringify([
+      status,
+      draft.mediaType,
+      fixedGenre?.id,
+      draft.genreIds,
+      fixedDirectorId,
+      draft.directors,
+    ]),
   )
   const options: { value: CollectionFilters['sort']; label: string }[] = [
     {
@@ -97,6 +110,20 @@ export function FiltersPage({
             </div>
           )}
         </fieldset>
+        {fixedDirectorId ? (
+          <fieldset>
+            <legend>Режиссёр</legend>
+            <p className="muted">
+              Выбран на странице работ. При сбросе фильтров режиссёр
+              сохраняется.
+            </p>
+          </fieldset>
+        ) : (
+          <DirectorPicker
+            value={draft.directors}
+            onChange={(directors) => setDraft({ ...draft, directors })}
+          />
+        )}
         <fieldset>
           <legend>Сортировать</legend>
           <div className="stack stack--tight">

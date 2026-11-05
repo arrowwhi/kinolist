@@ -62,6 +62,21 @@ func (mr *MockmovieRepositoryMockRecorder) CollectionGenres(ctx, userID any, med
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CollectionGenres", reflect.TypeOf((*MockmovieRepository)(nil).CollectionGenres), varargs...)
 }
 
+// CollectionGenresFiltered mocks base method.
+func (m *MockmovieRepository) CollectionGenresFiltered(ctx context.Context, f movie.Filter) ([]movie.GenreStats, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CollectionGenresFiltered", ctx, f)
+	ret0, _ := ret[0].([]movie.GenreStats)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CollectionGenresFiltered indicates an expected call of CollectionGenresFiltered.
+func (mr *MockmovieRepositoryMockRecorder) CollectionGenresFiltered(ctx, f any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CollectionGenresFiltered", reflect.TypeOf((*MockmovieRepository)(nil).CollectionGenresFiltered), ctx, f)
+}
+
 // Count mocks base method.
 func (m *MockmovieRepository) Count(ctx context.Context, f movie.Filter) (int, error) {
 	m.ctrl.T.Helper()
@@ -106,6 +121,21 @@ func (mr *MockmovieRepositoryMockRecorder) Get(ctx, userID, userMovieID any) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockmovieRepository)(nil).Get), ctx, userID, userMovieID)
 }
 
+// GetDirector mocks base method.
+func (m *MockmovieRepository) GetDirector(ctx context.Context, userID, directorID int64, mediaType movie.MediaType) (movie.DirectorStats, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDirector", ctx, userID, directorID, mediaType)
+	ret0, _ := ret[0].(movie.DirectorStats)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDirector indicates an expected call of GetDirector.
+func (mr *MockmovieRepositoryMockRecorder) GetDirector(ctx, userID, directorID, mediaType any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDirector", reflect.TypeOf((*MockmovieRepository)(nil).GetDirector), ctx, userID, directorID, mediaType)
+}
+
 // List mocks base method.
 func (m *MockmovieRepository) List(ctx context.Context, f movie.Filter) ([]movie.UserMovie, error) {
 	m.ctrl.T.Helper()
@@ -119,6 +149,22 @@ func (m *MockmovieRepository) List(ctx context.Context, f movie.Filter) ([]movie
 func (mr *MockmovieRepositoryMockRecorder) List(ctx, f any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockmovieRepository)(nil).List), ctx, f)
+}
+
+// ListDirectors mocks base method.
+func (m *MockmovieRepository) ListDirectors(ctx context.Context, f movie.DirectorFilter) ([]movie.DirectorStats, int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListDirectors", ctx, f)
+	ret0, _ := ret[0].([]movie.DirectorStats)
+	ret1, _ := ret[1].(int)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// ListDirectors indicates an expected call of ListDirectors.
+func (mr *MockmovieRepositoryMockRecorder) ListDirectors(ctx, f any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListDirectors", reflect.TypeOf((*MockmovieRepository)(nil).ListDirectors), ctx, f)
 }
 
 // ListGenres mocks base method.

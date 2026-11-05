@@ -1,5 +1,7 @@
 import type {
   Candidate,
+  DirectorStats,
+  DirectorList,
   ConfirmOptions,
   Genre,
   GenreStats,
@@ -44,13 +46,41 @@ export interface ListParams {
   mediaType?: MediaType
   status?: Status
   genreIds?: number[]
+  directorIds?: number[]
   query?: string
   sort?: 'added_at' | 'title' | 'year' | 'rating' | 'user_rating' | 'watched_at'
   order?: 'asc' | 'desc'
   limit?: number
   offset?: number
 }
+export interface DirectorListParams {
+  query?: string
+  mediaType?: MediaType
+  sort?: 'name' | 'work_count' | 'average_user_rating'
+  order?: 'asc' | 'desc'
+  limit?: number
+  offset?: number
+}
 export const api = {
+  listDirectors(params: DirectorListParams = {}, signal?: AbortSignal) {
+    const query = new URLSearchParams()
+    if (params.query) query.set('q', params.query)
+    if (params.mediaType) query.set('media_type', params.mediaType)
+    if (params.sort) query.set('sort', params.sort)
+    if (params.order) query.set('order', params.order)
+    if (params.limit) query.set('limit', String(params.limit))
+    if (params.offset) query.set('offset', String(params.offset))
+    return request<DirectorList>(`/directors?${query}`, {
+      signal,
+      cache: 'no-store',
+    })
+  },
+  getDirector(id: number, signal?: AbortSignal) {
+    return request<DirectorStats>(`/directors/${id}`, {
+      signal,
+      cache: 'no-store',
+    })
+  },
   me(signal?: AbortSignal) {
     return request<Me>('/me', { signal })
   },
@@ -66,6 +96,8 @@ export const api = {
     if (params.mediaType) search.set('media_type', params.mediaType)
     if (params.genreIds?.length)
       search.set('genre_ids', params.genreIds.join(','))
+    if (params.directorIds?.length)
+      search.set('director_ids', params.directorIds.join(','))
     if (params.query) search.set('q', params.query)
     if (params.sort) search.set('sort', params.sort)
     if (params.order) search.set('order', params.order)
@@ -76,8 +108,13 @@ export const api = {
   genres(signal?: AbortSignal) {
     return request<{ items: Genre[] }>('/genres', { signal })
   },
-  collectionGenres(signal?: AbortSignal, mediaType?: MediaType) {
+  collectionGenres(
+    signal?: AbortSignal,
+    mediaType?: MediaType,
+    directorIds?: number[],
+  ) {
     const query = new URLSearchParams({ scope: 'collection' })
+    if (directorIds?.length) query.set('director_ids', directorIds.join(','))
     if (mediaType) query.set('media_type', mediaType)
     return request<{ items: GenreStats[] }>(`/genres?${query}`, {
       signal,

@@ -21,6 +21,8 @@ func TestCandidateDetailsScopedAndCachedForConfirm(t *testing.T) {
 	}
 	votes := int32(150)
 	chosen.RuntimeMin = 166
+	chosen.DirectorsLoaded = true
+	chosen.Directors = []movie.Director{{TMDBID: 17, Name: "Дени Вильнёв", OriginalName: "Denis Villeneuve"}}
 	chosen.Rating = 8.5
 	chosen.RatingProvider = movie.ProviderTMDB
 	chosen.RatingVoteCount = &votes
@@ -37,6 +39,9 @@ func TestCandidateDetailsScopedAndCachedForConfirm(t *testing.T) {
 	d.tx.EXPECT().BeginTransaction(gomock.Any()).DoAndReturn(func(ctx context.Context) (context.Context, error) { return ctx, nil })
 	d.tx.EXPECT().FinishTransaction(gomock.Any(), gomock.Any())
 	d.movies.EXPECT().Upsert(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, m movie.Movie) (movie.Movie, error) {
+		if !m.DirectorsLoaded || len(m.Directors) != 1 || m.Directors[0].TMDBID != 17 {
+			t.Fatalf("directors lost: %+v", m)
+		}
 		if m.RuntimeMin != 166 {
 			t.Fatalf("runtime: %d", m.RuntimeMin)
 		}
@@ -73,5 +78,27 @@ func TestConfirmOptionsValidatedBeforeLookup(t *testing.T) {
 		if _, err := u.ConfirmWithOptions(context.Background(), 7, 1, movie.ProviderTMDB, 123, opts); err == nil {
 			t.Fatal("expected validation error")
 		}
+	}
+}
+
+func TestPartialDirectorDetailsAreRetried(t *testing.T) {
+	u, d := newUseCase(t, false)
+	chosen := candidate(123, "Dune", "Dune", 2021)
+	job := domain.Job{ID: 1, UserID: 7, Status: domain.StatusConfirming, Candidates: []movie.Candidate{chosen}}
+	d.jobs.EXPECT().GetForUser(gomock.Any(), int64(7), int64(1)).Return(job, nil).Times(2)
+	d.primary.EXPECT().Provider().Return(movie.ProviderTMDB).Times(2)
+	d.primary.EXPECT().Details(gomock.Any(), int32(123), movie.MediaMovie).Return(chosen, nil)
+	loaded := chosen
+	loaded.DirectorsLoaded = true
+	loaded.Directors = []movie.Director{{TMDBID: 17, Name: "Denis"}}
+	d.primary.EXPECT().Details(gomock.Any(), int32(123), movie.MediaMovie).Return(loaded, nil)
+	d.movies.EXPECT().GenresByTMDBIDs(gomock.Any(), []int32{18}).Return([]movie.Genre{{ID: 18}}, nil).Times(2)
+	first, err := u.CandidateDetails(context.Background(), 7, 1, movie.ProviderTMDB, 123)
+	if err != nil || first.DirectorsLoaded {
+		t.Fatalf("partial: %+v %v", first, err)
+	}
+	second, err := u.CandidateDetails(context.Background(), 7, 1, movie.ProviderTMDB, 123)
+	if err != nil || !second.DirectorsLoaded || len(second.Directors) != 1 {
+		t.Fatalf("retry: %+v %v", second, err)
 	}
 }

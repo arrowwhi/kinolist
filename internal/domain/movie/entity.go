@@ -66,6 +66,8 @@ type Genre struct {
 
 // Movie — карточка фильма в общем каталоге, одна на всех пользователей.
 type Movie struct {
+	Directors       []Director
+	DirectorsLoaded bool
 	MediaType       MediaType
 	SeasonCount     *int16
 	ID              int64
@@ -102,6 +104,8 @@ type UserMovie struct {
 
 // Candidate — результат поиска во внешнем каталоге, ещё не сохранённый.
 type Candidate struct {
+	Directors       []Director
+	DirectorsLoaded bool
 	MediaType       MediaType
 	SeasonCount     *int16
 	Provider        Provider
@@ -143,15 +147,16 @@ func (s SortBy) Valid() bool {
 
 // Filter описывает выборку коллекции пользователя.
 type Filter struct {
-	MediaType MediaType
-	UserID    int64
-	Status    Status
-	GenreIDs  []int16
-	Query     string
-	SortBy    SortBy
-	Desc      bool
-	Limit     int
-	Offset    int
+	DirectorIDs []int64
+	MediaType   MediaType
+	UserID      int64
+	Status      Status
+	GenreIDs    []int16
+	Query       string
+	SortBy      SortBy
+	Desc        bool
+	Limit       int
+	Offset      int
 }
 
 const (

@@ -18,6 +18,8 @@ import (
 )
 
 type collectionUseCase interface {
+	ListDirectors(ctx context.Context, f movie.DirectorFilter) (collection.DirectorPage, error)
+	GetDirector(ctx context.Context, userID, directorID int64, mediaType movie.MediaType) (movie.DirectorStats, error)
 	List(ctx context.Context, f movie.Filter) (collection.Page, error)
 	Get(ctx context.Context, userID, userMovieID int64) (movie.UserMovie, error)
 	Update(ctx context.Context, userID, userMovieID int64, upd movie.Update) (movie.UserMovie, error)
@@ -25,6 +27,7 @@ type collectionUseCase interface {
 	Genres(ctx context.Context) ([]movie.Genre, error)
 	Statistics(ctx context.Context, userID int64) (movie.Statistics, error)
 	CollectionGenres(ctx context.Context, userID int64, mediaTypes ...movie.MediaType) ([]movie.GenreStats, error)
+	CollectionGenresFiltered(ctx context.Context, f movie.Filter) ([]movie.GenreStats, error)
 	ResolveUser(ctx context.Context, u user.User) (user.User, error)
 }
 
@@ -141,7 +144,17 @@ func (h *Movie) Genres(w http.ResponseWriter, r *http.Request) {
 			writeError(w, r, user.ErrInvalidTelegram)
 			return
 		}
-		genres, err := h.uc.CollectionGenres(r.Context(), userID, movie.MediaType(r.URL.Query().Get("media_type")))
+		ids, err := parseDirectorIDs(r.URL.Query().Get("director_ids"))
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		var genres []movie.GenreStats
+		if len(ids) == 0 {
+			genres, err = h.uc.CollectionGenres(r.Context(), userID, movie.MediaType(r.URL.Query().Get("media_type")))
+		} else {
+			genres, err = h.uc.CollectionGenresFiltered(r.Context(), movie.Filter{UserID: userID, MediaType: movie.MediaType(r.URL.Query().Get("media_type")), DirectorIDs: ids})
+		}
 		if err != nil {
 			writeError(w, r, err)
 			return
@@ -189,6 +202,11 @@ func parseFilter(r *http.Request, userID int64) (movie.Filter, error) {
 		Desc:      q.Get("order") != "asc",
 	}
 
+	var err error
+	f.DirectorIDs, err = parseDirectorIDs(q.Get("director_ids"))
+	if err != nil {
+		return movie.Filter{}, err
+	}
 	if f.MediaType != "" && !f.MediaType.Valid() {
 		return movie.Filter{}, movie.ErrInvalidMediaType
 	}

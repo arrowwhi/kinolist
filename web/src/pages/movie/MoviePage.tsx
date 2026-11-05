@@ -1,3 +1,4 @@
+import { DirectorCredits } from '../../entities/director/DirectorCredits'
 import { useState } from 'react'
 import { api } from '../../api/client'
 import type { Navigate } from '../../shared/lib/navigation'
@@ -62,6 +63,13 @@ export function MoviePage({
           <MovieHero
             movie={item.movie}
             onGenre={(genre) => navigate(`/genres/${genre.id}`)}
+          />
+          <DirectorCredits
+            key={id}
+            directors={item.movie.directors}
+            onOpen={(directorId) =>
+              navigate(`/directors/${directorId}?status=all`)
+            }
           />
           <section className="stack stack--tight">
             <h2>{item.movie.media_type === 'tv' ? 'О сериале' : 'О фильме'}</h2>

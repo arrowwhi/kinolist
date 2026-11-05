@@ -43,6 +43,7 @@ func Genres(genres []movie.Genre) []dto.Genre {
 
 func Movie(m movie.Movie) dto.Movie {
 	return dto.Movie{
+		Directors: Directors(m.Directors),
 		MediaType: string(m.MediaType.Normalize()), SeasonCount: m.SeasonCount,
 		ID: m.ID, TMDBID: m.TMDBID, KinopoiskID: m.KinopoiskID,
 		Title: m.Title, OriginalTitle: m.OriginalTitle, Year: m.Year,
@@ -78,6 +79,7 @@ func MovieList(p collection.Page) dto.MovieList {
 
 func Candidate(c movie.Candidate) dto.Candidate {
 	return dto.Candidate{
+		Directors: Directors(c.Directors),
 		MediaType: string(c.MediaType.Normalize()), SeasonCount: c.SeasonCount,
 		Provider: string(c.Provider), ExternalID: c.ExternalID,
 		Title: c.Title, Year: c.Year, Overview: c.Overview,
@@ -111,4 +113,16 @@ func Update(req dto.UpdateMovieRequest) movie.Update {
 		upd.Status = &s
 	}
 	return upd
+}
+
+func Directors(items []movie.Director) []dto.Director {
+	out := make([]dto.Director, 0, len(items))
+	for _, d := range items {
+		out = append(out, dto.Director{ID: d.ID, TMDBID: d.TMDBID, KinopoiskID: d.KinopoiskID, Name: d.Name, OriginalName: d.OriginalName})
+	}
+	return out
+}
+
+func DirectorStats(d movie.DirectorStats) dto.DirectorStats {
+	return dto.DirectorStats{Director: dto.Director{ID: d.ID, TMDBID: d.TMDBID, KinopoiskID: d.KinopoiskID, Name: d.Name, OriginalName: d.OriginalName}, TotalCount: d.TotalCount, WantToWatchCount: d.WantToWatchCount, WatchedCount: d.WatchedCount, RatedCount: d.RatedCount, AverageUserRating: d.AverageUserRating}
 }

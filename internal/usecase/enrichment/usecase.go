@@ -464,7 +464,7 @@ func toMovie(c movie.Candidate, genres []movie.Genre) movie.Movie {
 		PosterPath:    c.PosterPath,
 		Rating:        c.Rating,
 		RuntimeMin:    c.RuntimeMin, RatingProvider: c.RatingProvider, RatingVoteCount: c.RatingVoteCount,
-		Genres: genres,
+		Genres: genres, Directors: c.Directors, DirectorsLoaded: c.DirectorsLoaded,
 	}
 	if c.Provider == movie.ProviderKinopoisk {
 		m.KinopoiskID = c.ExternalID
@@ -584,7 +584,10 @@ func (uc *UseCase) details(ctx context.Context, chosen movie.Candidate) (movie.C
 	if len(uc.detailsCache) >= 256 {
 		uc.detailsCache = make(map[string]cachedDetails)
 	}
-	uc.detailsCache[key] = cachedDetails{candidate: d, expires: time.Now().Add(15 * time.Minute)}
+	// A partial credits failure must be retried on confirmation.
+	if d.DirectorsLoaded {
+		uc.detailsCache[key] = cachedDetails{candidate: d, expires: time.Now().Add(15 * time.Minute)}
+	}
 	uc.detailsMu.Unlock()
 	return d, nil
 }

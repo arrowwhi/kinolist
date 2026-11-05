@@ -108,6 +108,7 @@ func (c *Client) Details(ctx context.Context, externalID int32, mediaTypes ...mo
 			}
 		}
 	}
+	c.loadDirectors(ctx, externalID, &d)
 	return d, nil
 }
 
@@ -148,4 +149,31 @@ func (c *Client) get(ctx context.Context, path string, params url.Values, out an
 	}
 
 	return nil
+}
+
+func (c *Client) loadDirectors(ctx context.Context, id int32, d *movie.Candidate) {
+	var staff []struct {
+		ID         int32  `json:"staffId"`
+		NameRU     string `json:"nameRu"`
+		NameEN     string `json:"nameEn"`
+		Profession string `json:"professionKey"`
+	}
+	if err := c.get(ctx, "/api/v1/staff", url.Values{"filmId": {strconv.Itoa(int(id))}}, &staff); err != nil || staff == nil {
+		return
+	}
+	d.DirectorsLoaded = true
+	d.Directors = make([]movie.Director, 0)
+	seen := map[int32]bool{}
+	for _, p := range staff {
+		name := strings.TrimSpace(p.NameRU)
+		original := strings.TrimSpace(p.NameEN)
+		if name == "" {
+			name = original
+		}
+		if p.Profession != "DIRECTOR" || p.ID <= 0 || name == "" || seen[p.ID] {
+			continue
+		}
+		seen[p.ID] = true
+		d.Directors = append(d.Directors, movie.Director{KinopoiskID: p.ID, Name: name, OriginalName: original})
+	}
 }

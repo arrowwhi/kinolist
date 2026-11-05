@@ -92,6 +92,11 @@ func (c *Client) Details(ctx context.Context, externalID int32, mediaTypes ...mo
 	if !mediaType.Valid() {
 		return movie.Candidate{}, movie.ErrInvalidMediaType
 	}
+	if mediaType == movie.MediaTV {
+		params.Set("append_to_response", "aggregate_credits")
+	} else {
+		params.Set("append_to_response", "credits")
+	}
 	var resp detailsResponse
 	if err := c.get(ctx, "/"+string(mediaType)+"/"+strconv.Itoa(int(externalID)), params, &resp); err != nil {
 		return movie.Candidate{}, err
@@ -161,7 +166,15 @@ func (c *Client) get(ctx context.Context, path string, params url.Values, out an
 		return fmt.Errorf("decode tmdb response: %w", err)
 	}
 
-	if c.cache != nil {
+	cacheable := true
+	if details, ok := out.(*detailsResponse); ok {
+		credits := details.Credits
+		if params.Get("append_to_response") == "aggregate_credits" {
+			credits = details.AggregateCredits
+		}
+		cacheable = credits != nil && credits.Crew != nil
+	}
+	if c.cache != nil && cacheable {
 		// Ошибка записи в кэш не должна ронять успешный запрос.
 		_ = c.cache.Set(ctx, key, payload, c.cacheTTL)
 	}
