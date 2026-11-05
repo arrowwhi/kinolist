@@ -89,8 +89,7 @@ export function MoviePage({
             </button>
           </section>
           <p className="muted small">
-            {item.source === 'reel' ? 'Из Instagram' : 'Добавлено по названию'}{' '}
-            · {formatDate(item.added_at)}
+            Добавлено в коллекцию · {formatDate(item.added_at)}
           </p>
           {watched && (
             <section className="stack stack--tight">

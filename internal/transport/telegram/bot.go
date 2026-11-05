@@ -88,7 +88,7 @@ func (b *Bot) handleMessage(ctx context.Context, m *Message) {
 
 	text := strings.TrimSpace(m.Text)
 	if text == "" {
-		b.reply(ctx, m.Chat.ID, "Пришлите ссылку на рилс или название фильма.")
+		b.reply(ctx, m.Chat.ID, "Пришлите название фильма или сериала.")
 		return
 	}
 
