@@ -25,11 +25,22 @@ func NewMovieRepository(tx *transactions.Manager) *MovieRepository {
 // фильма обновляет данные, а не создаёт дубль.
 func (r *MovieRepository) Upsert(ctx context.Context, m movie.Movie) (movie.Movie, error) {
 	q := r.tx.Querier(ctx)
+	if m.Rating != 0 && m.RatingProvider == "" {
+		if m.TMDBID != 0 {
+			m.RatingProvider = movie.ProviderTMDB
+		} else {
+			m.RatingProvider = movie.ProviderKinopoisk
+		}
+	}
+	if m.Rating == 0 {
+		m.RatingProvider = ""
+		m.RatingVoteCount = nil
+	}
 
 	const upsertTMDB = `
 		INSERT INTO movies (tmdb_id, kinopoisk_id, title, original_title, release_year,
-		                    overview, poster_path, runtime_min, rating)
-		VALUES ($1, nullif($2, 0), $3, $4, nullif($5, 0)::smallint, $6, $7, nullif($8, 0)::smallint, nullif($9, 0))
+		                    overview, poster_path, runtime_min, rating, rating_provider, rating_vote_count)
+		VALUES ($1, nullif($2, 0), $3, $4, nullif($5, 0)::smallint, $6, $7, nullif($8, 0)::smallint, nullif($9::numeric, 0), nullif($10, ''), $11)
 		ON CONFLICT (tmdb_id) DO UPDATE
 		SET title          = EXCLUDED.title,
 		    original_title = EXCLUDED.original_title,
@@ -38,14 +49,18 @@ func (r *MovieRepository) Upsert(ctx context.Context, m movie.Movie) (movie.Movi
 		    poster_path    = EXCLUDED.poster_path,
 		    runtime_min    = coalesce(EXCLUDED.runtime_min, movies.runtime_min),
 		    rating         = coalesce(EXCLUDED.rating, movies.rating),
+     rating_provider = CASE WHEN EXCLUDED.rating IS NOT NULL THEN EXCLUDED.rating_provider ELSE movies.rating_provider END,
+     rating_vote_count = CASE WHEN EXCLUDED.rating IS NULL THEN movies.rating_vote_count
+       WHEN EXCLUDED.rating_provider = movies.rating_provider THEN coalesce(EXCLUDED.rating_vote_count, movies.rating_vote_count)
+       ELSE EXCLUDED.rating_vote_count END,
 		    kinopoisk_id   = coalesce(EXCLUDED.kinopoisk_id, movies.kinopoisk_id),
 		    updated_at     = now()
-		RETURNING id`
+		RETURNING id, coalesce(runtime_min, 0), coalesce(rating, 0), coalesce(rating_provider, ''), rating_vote_count`
 
 	const upsertKinopoisk = `
 		INSERT INTO movies (tmdb_id, kinopoisk_id, title, original_title, release_year,
-		                    overview, poster_path, runtime_min, rating)
-		VALUES (nullif($1, 0), $2, $3, $4, nullif($5, 0)::smallint, $6, $7, nullif($8, 0)::smallint, nullif($9, 0))
+		                    overview, poster_path, runtime_min, rating, rating_provider, rating_vote_count)
+		VALUES (nullif($1, 0), $2, $3, $4, nullif($5, 0)::smallint, $6, $7, nullif($8, 0)::smallint, nullif($9::numeric, 0), nullif($10, ''), $11)
 		ON CONFLICT (kinopoisk_id) DO UPDATE
 		SET title          = EXCLUDED.title,
 		    original_title = EXCLUDED.original_title,
@@ -54,9 +69,13 @@ func (r *MovieRepository) Upsert(ctx context.Context, m movie.Movie) (movie.Movi
 		    poster_path    = EXCLUDED.poster_path,
 		    runtime_min    = coalesce(EXCLUDED.runtime_min, movies.runtime_min),
 		    rating         = coalesce(EXCLUDED.rating, movies.rating),
+     rating_provider = CASE WHEN EXCLUDED.rating IS NOT NULL THEN EXCLUDED.rating_provider ELSE movies.rating_provider END,
+     rating_vote_count = CASE WHEN EXCLUDED.rating IS NULL THEN movies.rating_vote_count
+       WHEN EXCLUDED.rating_provider = movies.rating_provider THEN coalesce(EXCLUDED.rating_vote_count, movies.rating_vote_count)
+       ELSE EXCLUDED.rating_vote_count END,
 		    tmdb_id        = coalesce(EXCLUDED.tmdb_id, movies.tmdb_id),
 		    updated_at     = now()
-		RETURNING id`
+		RETURNING id, coalesce(runtime_min, 0), coalesce(rating, 0), coalesce(rating_provider, ''), rating_vote_count`
 
 	stmt := upsertTMDB
 	if m.TMDBID == 0 {
@@ -69,8 +88,8 @@ func (r *MovieRepository) Upsert(ctx context.Context, m movie.Movie) (movie.Movi
 	var id int64
 	err := q.QueryRow(ctx, stmt,
 		m.TMDBID, m.KinopoiskID, m.Title, m.OriginalTitle, m.Year,
-		m.Overview, m.PosterPath, m.RuntimeMin, m.Rating,
-	).Scan(&id)
+		m.Overview, m.PosterPath, m.RuntimeMin, m.Rating, m.RatingProvider, m.RatingVoteCount,
+	).Scan(&id, &m.RuntimeMin, &m.Rating, &m.RatingProvider, &m.RatingVoteCount)
 	if err != nil {
 		return movie.Movie{}, fmt.Errorf("upsert movie: %w", err)
 	}
@@ -139,10 +158,10 @@ func (r *MovieRepository) Add(ctx context.Context, um movie.UserMovie) (movie.Us
 	// внутри транзакции переводит её в aborted, и все последующие запросы
 	// падают уже с ошибкой драйвера, затирая доменную ErrAlreadyInCollection.
 	const q = `
-		INSERT INTO user_movies (user_id, movie_id, status, source, source_url)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO user_movies (user_id, movie_id, status, source, source_url, user_rating, note, review, watched_at)
+ VALUES ($1, $2, $3, $4, $5, nullif($6, 0), $7, $8, CASE WHEN $3 = 'watched' THEN now() ELSE NULL END)
 		ON CONFLICT (user_id, movie_id) DO NOTHING
-		RETURNING id, added_at`
+		RETURNING id, added_at, watched_at`
 
 	status := um.Status
 	if status == "" {
@@ -154,11 +173,15 @@ func (r *MovieRepository) Add(ctx context.Context, um movie.UserMovie) (movie.Us
 	}
 
 	err := r.tx.Querier(ctx).
-		QueryRow(ctx, q, um.UserID, um.Movie.ID, status, source, um.SourceURL).
-		Scan(&um.ID, &um.AddedAt)
+		QueryRow(ctx, q, um.UserID, um.Movie.ID, status, source, um.SourceURL, um.UserRating, um.Note, um.Review).
+		Scan(&um.ID, &um.AddedAt, &um.WatchedAt)
 	if err != nil {
 		if isNoRows(err) || isUniqueViolation(err) {
-			return movie.UserMovie{}, movie.ErrAlreadyInCollection
+			var existingID int64
+			if e := r.tx.Querier(ctx).QueryRow(ctx, "SELECT id FROM user_movies WHERE user_id=$1 AND movie_id=$2", um.UserID, um.Movie.ID).Scan(&existingID); e != nil {
+				return movie.UserMovie{}, fmt.Errorf("find duplicate: %w", e)
+			}
+			return movie.UserMovie{}, &movie.AlreadyInCollectionError{UserMovieID: existingID}
 		}
 		return movie.UserMovie{}, fmt.Errorf("add movie to collection: %w", err)
 	}
@@ -284,6 +307,10 @@ func (r *MovieRepository) Update(ctx context.Context, userID, userMovieID int64,
 	}
 	if upd.Note != nil {
 		q = q.Set("note", *upd.Note)
+		changed = true
+	}
+	if upd.Review != nil {
+		q = q.Set("review", *upd.Review)
 		changed = true
 	}
 	if !changed {
@@ -415,11 +442,11 @@ func (r *MovieRepository) genresForMovies(ctx context.Context, movieIDs []int64)
 
 func (r *MovieRepository) selectUserMovies() squirrel.SelectBuilder {
 	return builder.Select(
-		"um.id", "um.user_id", "um.status", "coalesce(um.user_rating, 0)", "um.note",
+		"um.id", "um.user_id", "um.status", "coalesce(um.user_rating, 0)", "um.note", "um.review",
 		"um.source", "um.source_url", "um.added_at", "um.watched_at",
 		"m.id", "coalesce(m.tmdb_id, 0)", "coalesce(m.kinopoisk_id, 0)",
 		"m.title", "m.original_title", "coalesce(m.release_year, 0)",
-		"m.overview", "m.poster_path", "coalesce(m.runtime_min, 0)", "coalesce(m.rating, 0)",
+		"m.overview", "m.poster_path", "coalesce(m.runtime_min, 0)", "coalesce(m.rating, 0)", "coalesce(m.rating_provider, '')", "m.rating_vote_count",
 		"m.created_at", "m.updated_at",
 	).
 		From("user_movies um").
@@ -458,6 +485,10 @@ func orderClause(f movie.Filter) string {
 	}
 
 	switch f.SortBy {
+	case movie.SortByUserRating:
+		return "um.user_rating " + dir + " NULLS LAST, um.id DESC"
+	case movie.SortByWatchedAt:
+		return "um.watched_at " + dir + " NULLS LAST, um.id DESC"
 	case movie.SortByTitle:
 		return "m.title " + dir + ", um.id DESC"
 	case movie.SortByYear:
@@ -487,14 +518,14 @@ func collectGenres(rows pgx.Rows) ([]movie.Genre, error) {
 const movieColumns = `
 	m.id, coalesce(m.tmdb_id, 0), coalesce(m.kinopoisk_id, 0),
 	m.title, m.original_title, coalesce(m.release_year, 0),
-	m.overview, m.poster_path, coalesce(m.runtime_min, 0), coalesce(m.rating, 0),
+	m.overview, m.poster_path, coalesce(m.runtime_min, 0), coalesce(m.rating, 0), coalesce(m.rating_provider, ''), m.rating_vote_count,
 	m.created_at, m.updated_at`
 
 func scanMovie(row scanner) (movie.Movie, error) {
 	var m movie.Movie
 	err := row.Scan(
 		&m.ID, &m.TMDBID, &m.KinopoiskID, &m.Title, &m.OriginalTitle, &m.Year,
-		&m.Overview, &m.PosterPath, &m.RuntimeMin, &m.Rating, &m.CreatedAt, &m.UpdatedAt,
+		&m.Overview, &m.PosterPath, &m.RuntimeMin, &m.Rating, &m.RatingProvider, &m.RatingVoteCount, &m.CreatedAt, &m.UpdatedAt,
 	)
 	return m, err
 }
@@ -502,12 +533,49 @@ func scanMovie(row scanner) (movie.Movie, error) {
 func scanUserMovie(row scanner) (movie.UserMovie, error) {
 	var um movie.UserMovie
 	err := row.Scan(
-		&um.ID, &um.UserID, &um.Status, &um.UserRating, &um.Note,
+		&um.ID, &um.UserID, &um.Status, &um.UserRating, &um.Note, &um.Review,
 		&um.Source, &um.SourceURL, &um.AddedAt, &um.WatchedAt,
 		&um.Movie.ID, &um.Movie.TMDBID, &um.Movie.KinopoiskID,
 		&um.Movie.Title, &um.Movie.OriginalTitle, &um.Movie.Year,
-		&um.Movie.Overview, &um.Movie.PosterPath, &um.Movie.RuntimeMin, &um.Movie.Rating,
+		&um.Movie.Overview, &um.Movie.PosterPath, &um.Movie.RuntimeMin, &um.Movie.Rating, &um.Movie.RatingProvider, &um.Movie.RatingVoteCount,
 		&um.Movie.CreatedAt, &um.Movie.UpdatedAt,
 	)
 	return um, err
+}
+
+// Summary deliberately excludes search and pagination.
+func (r *MovieRepository) Summary(ctx context.Context, f movie.Filter) (movie.Summary, error) {
+	f.Query = ""
+	q := builder.Select("count(*)", "count(um.user_rating) FILTER (WHERE um.status = 'watched')", "round(avg(um.user_rating) FILTER (WHERE um.status = 'watched'), 1)").From("user_movies um").Join("movies m ON m.id = um.movie_id")
+	sql, args, err := r.applyFilter(q, f).ToSql()
+	if err != nil {
+		return movie.Summary{}, fmt.Errorf("build summary: %w", err)
+	}
+	var s movie.Summary
+	if err := r.tx.Querier(ctx).QueryRow(ctx, sql, args...).Scan(&s.MovieCount, &s.RatedCount, &s.AverageUserRating); err != nil {
+		return s, fmt.Errorf("collection summary: %w", err)
+	}
+	return s, nil
+}
+
+func (r *MovieRepository) CollectionGenres(ctx context.Context, userID int64) ([]movie.GenreStats, error) {
+	const q = `SELECT g.id, g.tmdb_id, g.name_ru, g.name_en,
+ count(*) FILTER (WHERE um.status = 'want_to_watch'), count(*) FILTER (WHERE um.status = 'watched')
+ FROM genres g JOIN movie_genres mg ON mg.genre_id=g.id
+ JOIN user_movies um ON um.movie_id=mg.movie_id
+ WHERE um.user_id=$1 GROUP BY g.id ORDER BY g.name_ru`
+	rows, err := r.tx.Querier(ctx).Query(ctx, q, userID)
+	if err != nil {
+		return nil, fmt.Errorf("collection genres: %w", err)
+	}
+	defer rows.Close()
+	out := make([]movie.GenreStats, 0)
+	for rows.Next() {
+		var g movie.GenreStats
+		if err := rows.Scan(&g.ID, &g.TMDBID, &g.NameRU, &g.NameEN, &g.WantToWatchCount, &g.WatchedCount); err != nil {
+			return nil, err
+		}
+		out = append(out, g)
+	}
+	return out, rows.Err()
 }

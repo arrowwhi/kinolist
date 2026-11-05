@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/arrowwhi/kinolist/internal/domain/enrichment"
@@ -62,8 +63,10 @@ type UseCase struct {
 	fallback  catalog
 	tx        txManager
 
-	maxAttempts int
-	retryDelay  time.Duration
+	maxAttempts  int
+	retryDelay   time.Duration
+	detailsMu    sync.Mutex
+	detailsCache map[string]cachedDetails
 }
 
 type Deps struct {
@@ -81,6 +84,11 @@ type Deps struct {
 	RetryDelay  time.Duration
 }
 
+type cachedDetails struct {
+	candidate movie.Candidate
+	expires   time.Time
+}
+
 func New(d Deps) *UseCase {
 	if d.MaxAttempts < 1 {
 		d.MaxAttempts = 3
@@ -90,15 +98,16 @@ func New(d Deps) *UseCase {
 	}
 
 	return &UseCase{
-		jobs:        d.Jobs,
-		movies:      d.Movies,
-		fetcher:     d.Fetcher,
-		extractor:   d.Extractor,
-		primary:     d.Primary,
-		fallback:    d.Fallback,
-		tx:          d.Tx,
-		maxAttempts: d.MaxAttempts,
-		retryDelay:  d.RetryDelay,
+		jobs:         d.Jobs,
+		detailsCache: make(map[string]cachedDetails),
+		movies:       d.Movies,
+		fetcher:      d.Fetcher,
+		extractor:    d.Extractor,
+		primary:      d.Primary,
+		fallback:     d.Fallback,
+		tx:           d.Tx,
+		maxAttempts:  d.MaxAttempts,
+		retryDelay:   d.RetryDelay,
 	}
 }
 
@@ -248,6 +257,16 @@ func (uc *UseCase) search(ctx context.Context, title string, year int16) ([]movi
 
 // Confirm сохраняет выбранного кандидата в коллекцию пользователя.
 func (uc *UseCase) Confirm(ctx context.Context, userID, jobID int64, provider movie.Provider, externalID int32) (movie.UserMovie, error) {
+	return uc.ConfirmWithOptions(ctx, userID, jobID, provider, externalID, movie.ConfirmOptions{})
+}
+
+func (uc *UseCase) ConfirmWithOptions(ctx context.Context, userID, jobID int64, provider movie.Provider, externalID int32, options movie.ConfirmOptions) (movie.UserMovie, error) {
+	if err := options.Validate(); err != nil {
+		return movie.UserMovie{}, err
+	}
+	if options.Status == "" {
+		options.Status = movie.StatusWantToWatch
+	}
 	job, err := uc.jobs.GetForUser(ctx, userID, jobID)
 	if err != nil {
 		return movie.UserMovie{}, fmt.Errorf("get job: %w", err)
@@ -261,14 +280,23 @@ func (uc *UseCase) Confirm(ctx context.Context, userID, jobID int64, provider mo
 		return movie.UserMovie{}, enrichment.ErrCandidateNotInJob
 	}
 
-	added, duplicate, err := uc.persist(ctx, userID, job, chosen)
+	// Resolve external metadata before opening the database transaction. Failure to
+	// enrich must not prevent saving a candidate already found in the catalogue.
+	detailed, detailErr := uc.details(ctx, chosen)
+	if ctx.Err() != nil {
+		return movie.UserMovie{}, ctx.Err()
+	}
+	if detailErr == nil {
+		chosen = detailed
+	}
+	added, duplicate, err := uc.persist(ctx, userID, job, chosen, options)
 	if err != nil {
 		return movie.UserMovie{}, err
 	}
 	// Дубль — законный исход, а не сбой: задача закрыта и закоммичена,
 	// вызывающему остаётся только сообщить пользователю.
 	if duplicate {
-		return movie.UserMovie{}, movie.ErrAlreadyInCollection
+		return movie.UserMovie{}, &movie.AlreadyInCollectionError{UserMovieID: added.ID}
 	}
 
 	return added, nil
@@ -282,6 +310,7 @@ func (uc *UseCase) persist(
 	userID int64,
 	job enrichment.Job,
 	chosen movie.Candidate,
+	options movie.ConfirmOptions,
 ) (result movie.UserMovie, duplicate bool, err error) {
 	ctx, err = uc.tx.BeginTransaction(ctx)
 	if err != nil {
@@ -305,15 +334,20 @@ func (uc *UseCase) persist(
 	}
 
 	added, addErr := uc.movies.Add(ctx, movie.UserMovie{
-		UserID:    userID,
-		Movie:     stored,
-		Status:    movie.StatusWantToWatch,
+		UserID:     userID,
+		Movie:      stored,
+		Status:     options.Status,
+		UserRating: options.UserRating, Review: options.Review, Note: options.Note,
 		Source:    source,
 		SourceURL: job.SourceURL,
 	})
 	switch {
 	case errors.Is(addErr, movie.ErrAlreadyInCollection):
 		duplicate = true
+		var existing *movie.AlreadyInCollectionError
+		if errors.As(addErr, &existing) {
+			result.ID = existing.UserMovieID
+		}
 	case addErr != nil:
 		return movie.UserMovie{}, false, fmt.Errorf("add movie to collection: %w", addErr)
 	default:
@@ -424,7 +458,8 @@ func toMovie(c movie.Candidate, genres []movie.Genre) movie.Movie {
 		Overview:      c.Overview,
 		PosterPath:    c.PosterPath,
 		Rating:        c.Rating,
-		Genres:        genres,
+		RuntimeMin:    c.RuntimeMin, RatingProvider: c.RatingProvider, RatingVoteCount: c.RatingVoteCount,
+		Genres: genres,
 	}
 	if c.Provider == movie.ProviderKinopoisk {
 		m.KinopoiskID = c.ExternalID
@@ -441,4 +476,90 @@ func findCandidate(candidates []movie.Candidate, p movie.Provider, id int32) (mo
 		}
 	}
 	return movie.Candidate{}, false
+}
+
+// CandidateDetails is scoped to the authenticated user's job, not a public
+// catalogue proxy. Never fetch a candidate not offered by that job.
+func (uc *UseCase) CandidateDetails(ctx context.Context, userID, jobID int64, provider movie.Provider, externalID int32) (movie.Movie, error) {
+	job, err := uc.jobs.GetForUser(ctx, userID, jobID)
+	if err != nil {
+		return movie.Movie{}, err
+	}
+	if job.Status != enrichment.StatusConfirming {
+		return movie.Movie{}, enrichment.ErrJobNotConfirmable
+	}
+	chosen, ok := findCandidate(job.Candidates, provider, externalID)
+	if !ok {
+		return movie.Movie{}, enrichment.ErrCandidateNotInJob
+	}
+	detailed, err := uc.details(ctx, chosen)
+	if err != nil {
+		return movie.Movie{}, err
+	}
+	genres, err := uc.resolveGenres(ctx, detailed)
+	if err != nil {
+		return movie.Movie{}, err
+	}
+	return toMovie(detailed, genres), nil
+}
+
+func (uc *UseCase) details(ctx context.Context, chosen movie.Candidate) (movie.Candidate, error) {
+	key := fmt.Sprintf("%s:%d", chosen.Provider, chosen.ExternalID)
+	uc.detailsMu.Lock()
+	cached, ok := uc.detailsCache[key]
+	uc.detailsMu.Unlock()
+	if ok && time.Now().Before(cached.expires) {
+		return cached.candidate, nil
+	}
+	var provider catalog
+	if uc.primary != nil && uc.primary.Provider() == chosen.Provider {
+		provider = uc.primary
+	}
+	if provider == nil && uc.fallback != nil && uc.fallback.Provider() == chosen.Provider {
+		provider = uc.fallback
+	}
+	if provider == nil {
+		return movie.Candidate{}, movie.ErrProviderUnavailable
+	}
+	d, err := provider.Details(ctx, chosen.ExternalID)
+	if err != nil {
+		return movie.Candidate{}, err
+	}
+	if d.ExternalID != chosen.ExternalID || d.Provider != chosen.Provider {
+		return movie.Candidate{}, movie.ErrNotFound
+	}
+	if d.Title == "" {
+		d.Title = chosen.Title
+	}
+	if d.Overview == "" {
+		d.Overview = chosen.Overview
+	}
+	if d.PosterPath == "" {
+		d.PosterPath = chosen.PosterPath
+	}
+	if d.OriginalTitle == "" {
+		d.OriginalTitle = chosen.OriginalTitle
+	}
+	if d.Year == 0 {
+		d.Year = chosen.Year
+	}
+	if d.Rating == 0 {
+		d.Rating = chosen.Rating
+		d.RatingProvider = chosen.RatingProvider
+		d.RatingVoteCount = chosen.RatingVoteCount
+	}
+	if len(d.GenreTMDBIDs) == 0 && len(d.GenreNames) == 0 {
+		d.GenreTMDBIDs = chosen.GenreTMDBIDs
+		d.GenreNames = chosen.GenreNames
+	}
+	if d.RatingProvider == "" && d.Rating != 0 {
+		d.RatingProvider = d.Provider
+	}
+	uc.detailsMu.Lock()
+	if len(uc.detailsCache) >= 256 {
+		uc.detailsCache = make(map[string]cachedDetails)
+	}
+	uc.detailsCache[key] = cachedDetails{candidate: d, expires: time.Now().Add(15 * time.Minute)}
+	uc.detailsMu.Unlock()
+	return d, nil
 }

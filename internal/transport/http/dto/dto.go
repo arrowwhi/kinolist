@@ -3,8 +3,9 @@
 package dto
 
 type Error struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code                string `json:"code"`
+	Message             string `json:"message"`
+	ExistingUserMovieID int64  `json:"existing_user_movie_id,omitempty"`
 }
 
 type Genre struct {
@@ -14,17 +15,19 @@ type Genre struct {
 }
 
 type Movie struct {
-	ID            int64   `json:"id"`
-	TMDBID        int32   `json:"tmdb_id,omitempty"`
-	KinopoiskID   int32   `json:"kinopoisk_id,omitempty"`
-	Title         string  `json:"title"`
-	OriginalTitle string  `json:"original_title,omitempty"`
-	Year          int16   `json:"year,omitempty"`
-	Overview      string  `json:"overview"`
-	PosterURL     string  `json:"poster_url,omitempty"`
-	RuntimeMin    int16   `json:"runtime_min,omitempty"`
-	Rating        float32 `json:"rating,omitempty"`
-	Genres        []Genre `json:"genres"`
+	ID              int64   `json:"id"`
+	TMDBID          int32   `json:"tmdb_id,omitempty"`
+	KinopoiskID     int32   `json:"kinopoisk_id,omitempty"`
+	Title           string  `json:"title"`
+	OriginalTitle   string  `json:"original_title,omitempty"`
+	Year            int16   `json:"year,omitempty"`
+	Overview        string  `json:"overview"`
+	PosterURL       string  `json:"poster_url,omitempty"`
+	RuntimeMin      int16   `json:"runtime_min,omitempty"`
+	RatingProvider  string  `json:"rating_provider,omitempty"`
+	RatingVoteCount *int32  `json:"rating_vote_count"`
+	Rating          float32 `json:"rating,omitempty"`
+	Genres          []Genre `json:"genres"`
 }
 
 type UserMovie struct {
@@ -32,6 +35,7 @@ type UserMovie struct {
 	Movie      Movie  `json:"movie"`
 	Status     string `json:"status"`
 	UserRating int16  `json:"user_rating,omitempty"`
+	Review     string `json:"review"`
 	Note       string `json:"note,omitempty"`
 	Source     string `json:"source"`
 	SourceURL  string `json:"source_url,omitempty"`
@@ -40,10 +44,11 @@ type UserMovie struct {
 }
 
 type MovieList struct {
-	Items  []UserMovie `json:"items"`
-	Total  int         `json:"total"`
-	Limit  int         `json:"limit"`
-	Offset int         `json:"offset"`
+	Items   []UserMovie `json:"items"`
+	Total   int         `json:"total"`
+	Limit   int         `json:"limit"`
+	Offset  int         `json:"offset"`
+	Summary Summary     `json:"summary"`
 }
 
 type GenreList struct {
@@ -53,6 +58,7 @@ type GenreList struct {
 type UpdateMovieRequest struct {
 	Status     *string `json:"status,omitempty"`
 	UserRating *int16  `json:"user_rating,omitempty"`
+	Review     *string `json:"review,omitempty"`
 	Note       *string `json:"note,omitempty"`
 }
 
@@ -63,13 +69,18 @@ type CreateJobRequest struct {
 }
 
 type Candidate struct {
-	Provider   string  `json:"provider"`
-	ExternalID int32   `json:"external_id"`
-	Title      string  `json:"title"`
-	Year       int16   `json:"year,omitempty"`
-	Overview   string  `json:"overview"`
-	PosterURL  string  `json:"poster_url,omitempty"`
-	Rating     float32 `json:"rating,omitempty"`
+	OriginalTitle   string  `json:"original_title,omitempty"`
+	RuntimeMin      int16   `json:"runtime_min,omitempty"`
+	RatingProvider  string  `json:"rating_provider,omitempty"`
+	RatingVoteCount *int32  `json:"rating_vote_count"`
+	Genres          []Genre `json:"genres"`
+	Provider        string  `json:"provider"`
+	ExternalID      int32   `json:"external_id"`
+	Title           string  `json:"title"`
+	Year            int16   `json:"year,omitempty"`
+	Overview        string  `json:"overview"`
+	PosterURL       string  `json:"poster_url,omitempty"`
+	Rating          float32 `json:"rating,omitempty"`
 }
 
 type Job struct {
@@ -84,6 +95,10 @@ type Job struct {
 }
 
 type ConfirmJobRequest struct {
+	Status     string `json:"status,omitempty"`
+	UserRating int16  `json:"user_rating,omitempty"`
+	Note       string `json:"note,omitempty"`
+	Review     string `json:"review,omitempty"`
 	Provider   string `json:"provider"`
 	ExternalID int32  `json:"external_id"`
 }
@@ -92,4 +107,15 @@ type Me struct {
 	ID        int64  `json:"id"`
 	Username  string `json:"username,omitempty"`
 	FirstName string `json:"first_name,omitempty"`
+}
+
+type Summary struct {
+	MovieCount        int      `json:"movie_count"`
+	RatedCount        int      `json:"rated_count"`
+	AverageUserRating *float64 `json:"average_user_rating"`
+}
+type GenreStats struct {
+	Genre
+	WantToWatchCount int `json:"want_to_watch_count"`
+	WatchedCount     int `json:"watched_count"`
 }

@@ -47,13 +47,14 @@ func Movie(m movie.Movie) dto.Movie {
 		Title: m.Title, OriginalTitle: m.OriginalTitle, Year: m.Year,
 		Overview: m.Overview, PosterURL: PosterURL(m.PosterPath),
 		RuntimeMin: m.RuntimeMin, Rating: m.Rating, Genres: Genres(m.Genres),
+		RatingProvider: string(m.RatingProvider), RatingVoteCount: m.RatingVoteCount,
 	}
 }
 
 func UserMovie(um movie.UserMovie) dto.UserMovie {
 	out := dto.UserMovie{
 		ID: um.ID, Movie: Movie(um.Movie), Status: string(um.Status),
-		UserRating: um.UserRating, Note: um.Note,
+		UserRating: um.UserRating, Note: um.Note, Review: um.Review,
 		Source: string(um.Source), SourceURL: um.SourceURL,
 		AddedAt: um.AddedAt.UTC().Format(time.RFC3339),
 	}
@@ -68,13 +69,17 @@ func MovieList(p collection.Page) dto.MovieList {
 	for _, um := range p.Items {
 		items = append(items, UserMovie(um))
 	}
-	return dto.MovieList{Items: items, Total: p.Total, Limit: p.Limit, Offset: p.Offset}
+	return dto.MovieList{
+		Items: items, Total: p.Total, Limit: p.Limit, Offset: p.Offset,
+		Summary: dto.Summary{MovieCount: p.Summary.MovieCount, RatedCount: p.Summary.RatedCount, AverageUserRating: p.Summary.AverageUserRating},
+	}
 }
 
 func Candidate(c movie.Candidate) dto.Candidate {
 	return dto.Candidate{
 		Provider: string(c.Provider), ExternalID: c.ExternalID,
 		Title: c.Title, Year: c.Year, Overview: c.Overview,
+		OriginalTitle: c.OriginalTitle, RuntimeMin: c.RuntimeMin, RatingProvider: string(c.RatingProvider), RatingVoteCount: c.RatingVoteCount, Genres: []dto.Genre{},
 		PosterURL: PosterURL(c.PosterPath), Rating: c.Rating,
 	}
 }
@@ -98,7 +103,7 @@ func Me(u user.User) dto.Me {
 
 // Update переводит частичное обновление из DTO в доменную форму.
 func Update(req dto.UpdateMovieRequest) movie.Update {
-	upd := movie.Update{UserRating: req.UserRating, Note: req.Note}
+	upd := movie.Update{UserRating: req.UserRating, Note: req.Note, Review: req.Review}
 	if req.Status != nil {
 		s := movie.Status(*req.Status)
 		upd.Status = &s

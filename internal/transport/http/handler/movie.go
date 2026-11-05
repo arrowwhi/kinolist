@@ -23,6 +23,7 @@ type collectionUseCase interface {
 	Update(ctx context.Context, userID, userMovieID int64, upd movie.Update) (movie.UserMovie, error)
 	Delete(ctx context.Context, userID, userMovieID int64) error
 	Genres(ctx context.Context) ([]movie.Genre, error)
+	CollectionGenres(ctx context.Context, userID int64) ([]movie.GenreStats, error)
 	ResolveUser(ctx context.Context, u user.User) (user.User, error)
 }
 
@@ -128,6 +129,31 @@ func (h *Movie) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Movie) Genres(w http.ResponseWriter, r *http.Request) {
+	scope := r.URL.Query().Get("scope")
+	if scope != "" && scope != "collection" {
+		writeError(w, r, errmap.ErrBadRequest)
+		return
+	}
+	if scope == "collection" {
+		userID, ok := middleware.UserID(r.Context())
+		if !ok {
+			writeError(w, r, user.ErrInvalidTelegram)
+			return
+		}
+		genres, err := h.uc.CollectionGenres(r.Context(), userID)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		items := make([]dto.GenreStats, 0, len(genres))
+		for _, g := range genres {
+			items = append(items, dto.GenreStats{Genre: converter.Genre(g.Genre), WantToWatchCount: g.WantToWatchCount, WatchedCount: g.WatchedCount})
+		}
+		writeJSON(w, http.StatusOK, struct {
+			Items []dto.GenreStats `json:"items"`
+		}{items})
+		return
+	}
 	genres, err := h.uc.Genres(r.Context())
 	if err != nil {
 		writeError(w, r, err)

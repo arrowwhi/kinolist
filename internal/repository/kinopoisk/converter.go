@@ -28,15 +28,16 @@ type genre struct {
 
 func (f film) toCandidate() movie.Candidate {
 	return movie.Candidate{
-		Provider:      movie.ProviderKinopoisk,
-		ExternalID:    f.FilmID,
-		Title:         f.NameRU,
-		OriginalTitle: f.NameEN,
-		Year:          parseYear(f.Year),
-		Overview:      f.Description,
-		PosterPath:    f.PosterURL,
-		Rating:        parseRating(f.Rating),
-		GenreNames:    genreNames(f.Genres),
+		Provider:       movie.ProviderKinopoisk,
+		ExternalID:     f.FilmID,
+		Title:          f.NameRU,
+		OriginalTitle:  f.NameEN,
+		Year:           parseYear(f.Year),
+		Overview:       f.Description,
+		PosterPath:     f.PosterURL,
+		Rating:         parseRating(f.Rating),
+		RatingProvider: movie.ProviderKinopoisk,
+		GenreNames:     genreNames(f.Genres),
 	}
 }
 
@@ -62,7 +63,8 @@ func (d filmDetails) toCandidate() movie.Candidate {
 		Overview:      d.Description,
 		PosterPath:    d.PosterURL,
 		Rating:        d.RatingKP,
-		GenreNames:    genreNames(d.Genres),
+		RuntimeMin:    d.FilmLength, RatingProvider: movie.ProviderKinopoisk,
+		GenreNames: genreNames(d.Genres),
 	}
 }
 

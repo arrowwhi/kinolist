@@ -1,0 +1,46 @@
+/* Semantic roles are the only colours used by UI components.
+   Dark is the approved design. Light is a prepared palette, not yet exposed in settings. */
+:root,
+[data-theme='dark'] {
+  color-scheme: dark;
+  --color-bg: #111311;
+  --color-surface: #1d211d;
+  --color-raised: #292f28;
+  --color-text: #f4f4ea;
+  --color-muted: #9ba595;
+  --color-accent: #d6f38a;
+  --color-on-accent: #202817;
+  --color-border: #343c31;
+  --color-danger: #f1a7a0;
+  --color-danger-bg: #3c2422;
+  --color-overlay: rgb(0 0 0 / 65%);
+  --color-genre-1: #354334;
+  --color-genre-2: #493c36;
+  --color-genre-3: #343d4b;
+  --color-genre-text: #f4f4ea;
+  --color-poster-text: #f4f4ea;
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --space-page: 24px;
+  --font-body:
+    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+[data-theme='light'] {
+  color-scheme: light;
+  --color-bg: #f7f8f2;
+  --color-surface: #edf0e7;
+  --color-raised: #e3e8dc;
+  --color-text: #202817;
+  --color-muted: #5b6653;
+  --color-accent: #d6f38a;
+  --color-on-accent: #202817;
+  --color-border: #cdd5c4;
+  --color-danger: #9f302a;
+  --color-danger-bg: #fbe9e6;
+  --color-overlay: rgb(20 26 16 / 40%);
+  --color-genre-1: #e1eadb;
+  --color-genre-2: #eee3d9;
+  --color-genre-3: #dfe6ee;
+  --color-genre-text: #202817;
+}

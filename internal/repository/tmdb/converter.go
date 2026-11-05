@@ -27,22 +27,24 @@ type result struct {
 	PosterPath    string  `json:"poster_path"`
 	ReleaseDate   string  `json:"release_date"`
 	Popularity    float32 `json:"popularity"`
+	VoteCount     *int32  `json:"vote_count"`
 	VoteAverage   float32 `json:"vote_average"`
 	GenreIDs      []int32 `json:"genre_ids"`
 }
 
 func (r result) toCandidate() movie.Candidate {
 	return movie.Candidate{
-		Provider:      movie.ProviderTMDB,
-		ExternalID:    r.ID,
-		Title:         r.Title,
-		OriginalTitle: r.OriginalTitle,
-		Year:          parseYear(r.ReleaseDate),
-		Overview:      r.Overview,
-		PosterPath:    r.PosterPath,
-		Popularity:    r.Popularity,
-		Rating:        r.VoteAverage,
-		GenreTMDBIDs:  r.GenreIDs,
+		Provider:       movie.ProviderTMDB,
+		ExternalID:     r.ID,
+		Title:          r.Title,
+		OriginalTitle:  r.OriginalTitle,
+		Year:           parseYear(r.ReleaseDate),
+		Overview:       r.Overview,
+		PosterPath:     r.PosterPath,
+		Popularity:     r.Popularity,
+		Rating:         r.VoteAverage,
+		RatingProvider: movie.ProviderTMDB, RatingVoteCount: r.VoteCount,
+		GenreTMDBIDs: r.GenreIDs,
 	}
 }
 
@@ -57,6 +59,7 @@ type detailsResponse struct {
 
 func (d detailsResponse) toCandidate() movie.Candidate {
 	c := d.result.toCandidate()
+	c.RuntimeMin = d.Runtime
 
 	ids := make([]int32, 0, len(d.Genres))
 	names := make([]string, 0, len(d.Genres))

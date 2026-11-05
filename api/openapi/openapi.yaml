@@ -30,7 +30,12 @@ paths:
 
   /genres:
     get:
-      summary: Справочник жанров
+      summary: Справочник жанров или сводка коллекции
+      parameters:
+        - name: scope
+          in: query
+          description: collection возвращает только жанры пользователя со счётчиками статусов
+          schema: { type: string, enum: [collection] }
       responses:
         '200':
           description: OK
@@ -42,7 +47,10 @@ paths:
                 properties:
                   items:
                     type: array
-                    items: { $ref: '#/components/schemas/Genre' }
+                    items:
+                      anyOf:
+                        - { $ref: '#/components/schemas/Genre' }
+                        - { $ref: '#/components/schemas/GenreStats' }
 
   /movies:
     get:
@@ -63,7 +71,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [added_at, title, year, rating]
+            enum: [added_at, title, year, rating, user_rating, watched_at]
             default: added_at
         - name: order
           in: query
@@ -99,7 +107,7 @@ paths:
               schema: { $ref: '#/components/schemas/UserMovie' }
         '404': { $ref: '#/components/responses/NotFound' }
     patch:
-      summary: Изменить статус, оценку или заметку
+      summary: Изменить статус, оценку, заметку или отзыв
       requestBody:
         required: true
         content:
@@ -159,6 +167,26 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Job' }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  /jobs/{id}/candidates/{provider}/{external_id}:
+    get:
+      summary: Подробности кандидата из задачи текущего пользователя
+      description: Доступен только для кандидата из задачи в статусе confirming. ID фильма в ответе равен 0 до сохранения. Подробности кэшируются на 15 минут.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+        - { name: provider, in: path, required: true, schema: { type: string, enum: [tmdb, kinopoisk] } }
+        - { name: external_id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: Подробности выбранного кандидата
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Movie' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Задача уже завершена }
+        '502': { description: Каталог недоступен }
 
   /jobs/{id}/confirm:
     parameters:
@@ -229,6 +257,7 @@ components:
       properties:
         code: { type: string, example: already_in_collection }
         message: { type: string, example: Фильм уже в коллекции }
+        existing_user_movie_id: { type: integer, format: int64, description: ID существующей записи при already_in_collection }
 
     Status:
       type: string
@@ -264,6 +293,8 @@ components:
         poster_url: { type: string, format: uri }
         runtime_min: { type: integer }
         rating: { type: number, format: float }
+        rating_provider: { type: string, enum: [tmdb, kinopoisk] }
+        rating_vote_count: { type: [integer, 'null'], minimum: 0 }
         genres:
           type: array
           items: { $ref: '#/components/schemas/Genre' }
@@ -277,6 +308,7 @@ components:
         status: { $ref: '#/components/schemas/Status' }
         user_rating: { type: integer, minimum: 1, maximum: 10 }
         note: { type: string }
+        review: { type: string, maxLength: 5000 }
         source: { type: string, enum: [reel, manual] }
         source_url: { type: string }
         added_at: { type: string, format: date-time }
@@ -284,7 +316,7 @@ components:
 
     MovieList:
       type: object
-      required: [items, total, limit, offset]
+      required: [items, total, limit, offset, summary]
       properties:
         items:
           type: array
@@ -292,6 +324,7 @@ components:
         total: { type: integer }
         limit: { type: integer }
         offset: { type: integer }
+        summary: { $ref: '#/components/schemas/CollectionSummary' }
 
     UpdateMovieRequest:
       type: object
@@ -304,6 +337,7 @@ components:
           maximum: 10
           description: 0 снимает оценку
         note: { type: string }
+        review: { type: string, maxLength: 5000 }
 
     CreateJobRequest:
       type: object
@@ -320,11 +354,18 @@ components:
       properties:
         provider: { type: string, enum: [tmdb, kinopoisk] }
         external_id: { type: integer }
+        original_title: { type: string }
+        runtime_min: { type: integer }
+        genres:
+          type: array
+          items: { $ref: '#/components/schemas/Genre' }
         title: { type: string }
         year: { type: integer }
         overview: { type: string }
         poster_url: { type: string, format: uri }
         rating: { type: number, format: float }
+        rating_provider: { type: string, enum: [tmdb, kinopoisk] }
+        rating_vote_count: { type: [integer, 'null'], minimum: 0 }
 
     Job:
       type: object
@@ -351,3 +392,26 @@ components:
       properties:
         provider: { type: string, enum: [tmdb, kinopoisk] }
         external_id: { type: integer }
+
+        status: { $ref: '#/components/schemas/Status' }
+        user_rating: { type: integer, minimum: 0, maximum: 10, default: 0 }
+        note: { type: string }
+        review: { type: string, maxLength: 5000 }
+
+    CollectionSummary:
+      type: object
+      description: Статус и жанры учитываются; q, limit и offset игнорируются. Средняя только по просмотренным с оценкой.
+      required: [movie_count, rated_count, average_user_rating]
+      properties:
+        movie_count: { type: integer }
+        rated_count: { type: integer }
+        average_user_rating: { type: [number, 'null'] }
+
+    GenreStats:
+      allOf:
+        - { $ref: '#/components/schemas/Genre' }
+        - type: object
+          required: [want_to_watch_count, watched_count]
+          properties:
+            want_to_watch_count: { type: integer }
+            watched_count: { type: integer }

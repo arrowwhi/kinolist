@@ -8,6 +8,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/arrowwhi/kinolist/internal/domain/movie"
 	"github.com/arrowwhi/kinolist/internal/pkg/errmap"
 	"github.com/arrowwhi/kinolist/internal/pkg/logger"
 	"github.com/arrowwhi/kinolist/internal/transport/http/dto"
@@ -37,7 +38,12 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		logger.From(r.Context()).Debug("request rejected", zap.Error(err))
 	}
 
-	writeJSON(w, resp.Status, dto.Error{Code: resp.Code, Message: resp.Message})
+	body := dto.Error{Code: resp.Code, Message: resp.Message}
+	var duplicate *movie.AlreadyInCollectionError
+	if errors.As(err, &duplicate) {
+		body.ExistingUserMovieID = duplicate.UserMovieID
+	}
+	writeJSON(w, resp.Status, body)
 }
 
 func decodeJSON(r *http.Request, target any) error {

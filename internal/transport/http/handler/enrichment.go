@@ -3,6 +3,9 @@ package handler
 import (
 	"context"
 	"net/http"
+	"strconv"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/arrowwhi/kinolist/internal/domain/enrichment"
 	"github.com/arrowwhi/kinolist/internal/domain/movie"
@@ -18,6 +21,8 @@ type enrichmentUseCase interface {
 	JobForUser(ctx context.Context, userID, jobID int64) (enrichment.Job, error)
 	Confirm(ctx context.Context, userID, jobID int64, provider movie.Provider, externalID int32) (movie.UserMovie, error)
 	Reject(ctx context.Context, userID, jobID int64) error
+	ConfirmWithOptions(ctx context.Context, userID, jobID int64, provider movie.Provider, externalID int32, options movie.ConfirmOptions) (movie.UserMovie, error)
+	CandidateDetails(ctx context.Context, userID, jobID int64, provider movie.Provider, externalID int32) (movie.Movie, error)
 }
 
 type Enrichment struct {
@@ -99,7 +104,7 @@ func (h *Enrichment) Confirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	um, err := h.uc.Confirm(r.Context(), userID, id, movie.Provider(req.Provider), req.ExternalID)
+	um, err := h.uc.ConfirmWithOptions(r.Context(), userID, id, movie.Provider(req.Provider), req.ExternalID, movie.ConfirmOptions{Status: movie.Status(req.Status), UserRating: req.UserRating, Review: req.Review, Note: req.Note})
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -147,4 +152,28 @@ func errFromJob(j enrichment.Job) error {
 		}
 	}
 	return errUnknownJobFailure
+}
+
+func (h *Enrichment) CandidateDetails(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserID(r.Context())
+	if !ok {
+		writeError(w, r, user.ErrInvalidTelegram)
+		return
+	}
+	jobID, err := pathID(r)
+	if err != nil {
+		writeError(w, r, enrichment.ErrJobNotFound)
+		return
+	}
+	externalID, err := strconv.ParseInt(chi.URLParam(r, "external_id"), 10, 32)
+	if err != nil || externalID <= 0 {
+		writeError(w, r, errmap.ErrBadRequest)
+		return
+	}
+	m, err := h.uc.CandidateDetails(r.Context(), userID, jobID, movie.Provider(chi.URLParam(r, "provider")), int32(externalID))
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, converter.Movie(m))
 }
