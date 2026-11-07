@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import type { Candidate, UserMovie } from '../../api/types'
 import type { Navigate } from '../../shared/lib/navigation'
 import type { RecentCandidate } from '../../features/add-movie/useRecentCandidates'
@@ -24,6 +24,7 @@ export function AddMoviePage({
   recent: RecentCandidate[]
   remember: (input: string, candidates: Candidate[]) => void
 }) {
+  const queryId = useId()
   const onAdded = (item: UserMovie) => {
     changed(
       item.status === 'watched' ? 'Просмотр сохранён' : 'Добавлено в коллекцию',
@@ -129,27 +130,31 @@ export function AddMoviePage({
               <br />
               посмотри, когда захочется.
             </p>
-            <Field
-              label="Название фильма или сериала"
-              placeholder="Например, «Идеальные дни»"
-              value={flow.input}
-              onChange={(e) => flow.setInput(e.target.value)}
-              disabled={flow.busy}
-              required
-              maxLength={2000}
-              autoComplete="off"
-            />
-            <Button
-              variant="secondary"
-              onClick={() => void paste()}
-              disabled={flow.busy}
-            >
-              Вставить название
-            </Button>
-            <p className="muted small">
-              Введи название фильма или сериала. Можно добавить год выхода,
-              чтобы точнее найти нужную историю.
-            </p>
+            <div className="field-label">
+              <label className="add-form__label" htmlFor={queryId}>
+                Название фильма или сериала
+              </label>
+              <div className="add-form__row">
+                <Field
+                  id={queryId}
+                  placeholder="Например, «Идеальные дни»"
+                  value={flow.input}
+                  onChange={(e) => flow.setInput(e.target.value)}
+                  disabled={flow.busy}
+                  required
+                  maxLength={2000}
+                  autoComplete="off"
+                />
+                <Button
+                  variant="secondary"
+                  className="add-form__paste"
+                  onClick={() => void paste()}
+                  disabled={flow.busy}
+                >
+                  Вставить
+                </Button>
+              </div>
+            </div>
             <InlineError message={flow.error} />
             <Button
               type="submit"
