@@ -38,6 +38,10 @@ type HTTP struct {
 	WriteTimeout   time.Duration
 	HandlerTimeout time.Duration
 	PublicURL      string
+	// MetricsAddr — отдельный внутренний адрес для /metrics. Прокси
+	// (Coolify, Caddy) публикует только Addr, поэтому метрики снаружи не видны.
+	// Пустое значение выключает эндпоинт.
+	MetricsAddr string
 }
 
 type Postgres struct {
@@ -133,6 +137,7 @@ func Load(path string) (*Config, error) {
 			WriteTimeout:   p.duration("HTTP_WRITE_TIMEOUT", 30*time.Second),
 			HandlerTimeout: p.duration("HTTP_HANDLER_TIMEOUT", 25*time.Second),
 			PublicURL:      strings.TrimSuffix(p.str("PUBLIC_URL", ""), "/"),
+			MetricsAddr:    p.str("METRICS_ADDR", ":9091"),
 		},
 		Postgres: Postgres{
 			DSN:               p.str("POSTGRES_DSN", ""),
