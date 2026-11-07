@@ -67,9 +67,7 @@ export function MoviePage({
           <DirectorCredits
             key={id}
             directors={item.movie.directors}
-            onOpen={(directorId) =>
-              navigate(`/directors/${directorId}?status=all`)
-            }
+            onOpen={(directorId) => navigate(`/v2/directors/${directorId}`)}
           />
           <section className="stack stack--tight">
             <h2>{item.movie.media_type === 'tv' ? 'О сериале' : 'О фильме'}</h2>
