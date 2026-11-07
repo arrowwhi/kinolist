@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './app/App'
 import { ErrorBoundary } from './app/ErrorBoundary'
+import { applyTheme, readStoredTheme } from './shared/lib/theme'
 import '@fontsource/inter/400.css'
 import '@fontsource/inter/500.css'
 import '@fontsource/inter/600.css'
@@ -19,6 +20,10 @@ import './pages/filters/filters.css'
 import './features/rating/rating.css'
 import './features/add-movie/add-movie.css'
 import './shared/ui/feedback.css'
+import './features/theme/theme.css'
+
+// До первого рендера, чтобы светлая тема не мигала тёмной при запуске.
+applyTheme(readStoredTheme())
 
 const root = document.getElementById('root')
 if (!root) throw new Error('root element is missing')

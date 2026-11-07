@@ -23,6 +23,7 @@ export function HomePage({
         </>
       }
       navigate={navigate}
+      themeToggle
       floating={
         <Button className="button--pill" onClick={() => navigate('/add')}>
           ＋ Добавить

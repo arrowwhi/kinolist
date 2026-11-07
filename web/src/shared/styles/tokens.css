@@ -1,5 +1,6 @@
 /* Semantic roles are the only colours used by UI components.
-   Dark is the approved design. Light is a prepared palette, not yet exposed in settings. */
+   Тема — атрибут data-theme на <html> (shared/lib/theme.ts); тёмная по
+   умолчанию. Палитра светлой — в Figma, секция «Светлая тема · токены». */
 :root,
 [data-theme='dark'] {
   color-scheme: dark;
@@ -10,7 +11,12 @@
   --color-muted: #9ba595;
   --color-accent: #d6f38a;
   --color-on-accent: #202817;
+  /* Акцентный текст и ссылки: в светлой теме лайм на светлом не читается. */
+  --color-accent-text: #d6f38a;
   --color-border: #343c31;
+  /* Обводка карточек и полей: нужна только на светлом фоне. */
+  --color-edge: transparent;
+  --color-shadow: rgb(0 0 0 / 40%);
   --color-danger: #f1a7a0;
   --color-danger-bg: #3c2422;
   --color-overlay: rgb(0 0 0 / 65%);
@@ -28,19 +34,22 @@
 }
 [data-theme='light'] {
   color-scheme: light;
-  --color-bg: #f7f8f2;
-  --color-surface: #edf0e7;
-  --color-raised: #e3e8dc;
-  --color-text: #202817;
+  --color-bg: #f4f5ef;
+  --color-surface: #ffffff;
+  --color-raised: #e9ece3;
+  --color-text: #1b2116;
   --color-muted: #5b6653;
   --color-accent: #d6f38a;
   --color-on-accent: #202817;
-  --color-border: #cdd5c4;
+  --color-accent-text: #4f6b16;
+  --color-border: #c9d0c0;
+  --color-edge: #dde2d5;
+  --color-shadow: rgb(27 33 22 / 10%);
   --color-danger: #9f302a;
   --color-danger-bg: #fbe9e6;
   --color-overlay: rgb(20 26 16 / 40%);
   --color-genre-1: #e1eadb;
   --color-genre-2: #eee3d9;
   --color-genre-3: #dfe6ee;
-  --color-genre-text: #202817;
+  --color-genre-text: #1b2116;
 }

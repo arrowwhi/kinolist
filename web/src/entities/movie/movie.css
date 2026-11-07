@@ -24,12 +24,8 @@
 }
 .movie-card__rating,
 .movie-card__personal {
-  color: var(--color-accent);
+  color: var(--color-accent-text);
   font-size: 11px;
-}
-[data-theme='light'] .movie-card__rating,
-[data-theme='light'] .movie-card__personal {
-  color: var(--color-text);
 }
 .movie-card__rating {
   display: flex;
@@ -108,10 +104,7 @@
   font-size: 44px;
   font-weight: 700;
   line-height: 1.35;
-  color: var(--color-accent);
-}
-[data-theme='light'] .catalog-rating--large .catalog-rating__value {
-  color: var(--color-text);
+  color: var(--color-accent-text);
 }
 .catalog-rating--large .catalog-rating__source {
   color: var(--color-muted);
@@ -157,6 +150,7 @@
   min-height: 84px;
   border-radius: var(--radius-md);
   background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-edge);
   text-align: left;
   color: var(--color-muted);
   white-space: pre-wrap;
@@ -191,6 +185,7 @@
 .metadata-tag {
   padding: 8px 12px;
   background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-edge);
   border-radius: 99px;
   font-size: 11px;
   color: var(--color-muted);
