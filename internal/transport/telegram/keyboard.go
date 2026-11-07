@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/arrowwhi/infrastructure/telegram/api"
+	tg "github.com/arrowwhi/infrastructure/telegram"
 
 	"github.com/arrowwhi/kinolist/internal/domain/movie"
 )
@@ -92,8 +92,8 @@ func providerFromCode(code string) movie.Provider {
 }
 
 // confirmKeyboard показывается, когда фильм найден уверенно.
-func confirmKeyboard(jobID int64, c movie.Candidate) *api.InlineKeyboardMarkup {
-	return &api.InlineKeyboardMarkup{InlineKeyboard: [][]api.InlineKeyboardButton{
+func confirmKeyboard(jobID int64, c movie.Candidate) *tg.InlineKeyboardMarkup {
+	return &tg.InlineKeyboardMarkup{InlineKeyboard: [][]tg.InlineKeyboardButton{
 		{
 			{Text: "✅ Да, добавить", CallbackData: callback{
 				Action: actionConfirm, JobID: jobID, Provider: c.Provider, ExternalID: c.ExternalID, MediaType: c.MediaType.Normalize(),
@@ -109,33 +109,33 @@ func confirmKeyboard(jobID int64, c movie.Candidate) *api.InlineKeyboardMarkup {
 }
 
 // choiceKeyboard показывается, когда уверенного совпадения нет.
-func choiceKeyboard(jobID int64, candidates []movie.Candidate) *api.InlineKeyboardMarkup {
-	rows := make([][]api.InlineKeyboardButton, 0, len(candidates)+1)
+func choiceKeyboard(jobID int64, candidates []movie.Candidate) *tg.InlineKeyboardMarkup {
+	rows := make([][]tg.InlineKeyboardButton, 0, len(candidates)+1)
 
 	for i, c := range candidates {
 		data := callback{Action: actionPick, JobID: jobID, Provider: c.Provider, ExternalID: c.ExternalID, MediaType: c.MediaType.Normalize()}.encode()
 		if len(data) > maxCallbackBytes {
 			continue
 		}
-		rows = append(rows, []api.InlineKeyboardButton{{
+		rows = append(rows, []tg.InlineKeyboardButton{{
 			Text:         fmt.Sprintf("%d. %s", i+1, shortLabel(c)),
 			CallbackData: data,
 		}})
 	}
 
-	rows = append(rows, []api.InlineKeyboardButton{
+	rows = append(rows, []tg.InlineKeyboardButton{
 		{Text: "✖️ Ничего из этого", CallbackData: callback{Action: actionReject, JobID: jobID}.encode()},
 	})
 
-	return &api.InlineKeyboardMarkup{InlineKeyboard: rows}
+	return &tg.InlineKeyboardMarkup{InlineKeyboard: rows}
 }
 
-func openAppKeyboard(webAppURL string) *api.InlineKeyboardMarkup {
+func openAppKeyboard(webAppURL string) *tg.InlineKeyboardMarkup {
 	if webAppURL == "" {
 		return nil
 	}
-	return &api.InlineKeyboardMarkup{InlineKeyboard: [][]api.InlineKeyboardButton{
-		{{Text: "🎬 Открыть коллекцию", WebApp: &api.WebAppInfo{URL: webAppURL}}},
+	return &tg.InlineKeyboardMarkup{InlineKeyboard: [][]tg.InlineKeyboardButton{
+		{{Text: "🎬 Открыть коллекцию", WebApp: &tg.WebAppInfo{URL: webAppURL}}},
 	}}
 }
 

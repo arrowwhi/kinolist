@@ -1,5 +1,5 @@
 // Package app собирает зависимости вручную и запускает их на инфраструктуре
-// github.com/arrowwhi/infrastructure: telegram/app отвечает за логи, метрики,
+// github.com/arrowwhi/infrastructure: пакет telegram инфраструктуры отвечает за логи, метрики,
 // трейсинг, служебный порт и порядок остановки, здесь — только wiring kinolist.
 package app
 
@@ -12,8 +12,7 @@ import (
 	"github.com/arrowwhi/infrastructure/observability/logger"
 	"github.com/arrowwhi/infrastructure/observability/metrics"
 	"github.com/arrowwhi/infrastructure/observability/tracing"
-	infraapp "github.com/arrowwhi/infrastructure/telegram/app"
-	tgbot "github.com/arrowwhi/infrastructure/telegram/bot"
+	tg "github.com/arrowwhi/infrastructure/telegram"
 
 	"github.com/arrowwhi/kinolist/internal/config"
 	"github.com/arrowwhi/kinolist/internal/domain/user"
@@ -56,7 +55,7 @@ func Run(ctx context.Context, envFile string) error {
 		return err
 	}
 
-	a, err := infraapp.New(ctx, infraConfig(cfg))
+	a, err := tg.NewApp(ctx, infraConfig(cfg))
 	if err != nil {
 		return err
 	}
@@ -128,8 +127,8 @@ func Run(ctx context.Context, envFile string) error {
 	directorsUC := directorsuc.New(directorDeps)
 
 	// --- telegram ---
-	bot, err := tgbot.New(botConfig(cfg),
-		tgbot.WithErrorHandler(tgbot.ReplyOnError("⚠️ Что-то пошло не так. Попробуйте ещё раз.")))
+	bot, err := tg.New(botConfig(cfg),
+		tg.WithErrorHandler(tg.ReplyOnError("⚠️ Что-то пошло не так. Попробуйте ещё раз.")))
 	if err != nil {
 		_ = a.Shutdown(ctx)
 		return err
@@ -188,7 +187,7 @@ const readinessDrainDelay = 2 * time.Second
 // httpComponent запускает публичный HTTP-сервер. Порядок остановки: /readyz
 // начинает отвечать ошибкой, балансировщик уводит трафик, и только потом
 // закрывается приём запросов.
-func httpComponent(server *transporthttp.Server, health *handler.Health, cfg *config.Config) infraapp.ComponentFunc {
+func httpComponent(server *transporthttp.Server, health *handler.Health, cfg *config.Config) tg.ComponentFunc {
 	return func(ctx context.Context) error {
 		errCh := make(chan error, 1)
 
@@ -227,8 +226,8 @@ func httpComponent(server *transporthttp.Server, health *handler.Health, cfg *co
 
 // infraConfig переводит конфиг kinolist в конфиг инфраструктуры. Переменные
 // окружения kinolist остаются прежними, поэтому деплой менять не нужно.
-func infraConfig(cfg *config.Config) infraapp.Config {
-	ac := infraapp.Config{
+func infraConfig(cfg *config.Config) tg.AppConfig {
+	ac := tg.AppConfig{
 		ServiceName:     serviceName,
 		Version:         version,
 		Environment:     cfg.App.Env,
@@ -251,15 +250,15 @@ func infraConfig(cfg *config.Config) infraapp.Config {
 	// Служебный порт (/metrics, /healthz, /ready) — на METRICS_ADDR, который не
 	// публикуется наружу. Пустое значение выключает его.
 	if host, port, err := net.SplitHostPort(cfg.HTTP.MetricsAddr); err == nil && port != "" {
-		ac.Admin = infraapp.AdminConfig{Host: host, Port: port, Enabled: true}
+		ac.Admin = tg.AdminConfig{Host: host, Port: port, Enabled: true}
 	}
 
 	return ac
 }
 
 // botConfig собирает настройки бота инфраструктуры из конфига kinolist.
-func botConfig(cfg *config.Config) tgbot.Config {
-	bc := tgbot.DefaultConfig(cfg.Telegram.BotToken)
+func botConfig(cfg *config.Config) tg.Config {
+	bc := tg.DefaultConfig(cfg.Telegram.BotToken)
 	bc.API.BaseURL = cfg.Telegram.APIURL
 	bc.Mode = cfg.Telegram.Mode
 	bc.PollTimeout = cfg.Telegram.PollTimeout
