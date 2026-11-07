@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { parseTheme, themeBackground, type Theme } from './theme'
 export function webApp() {
   return window.Telegram?.WebApp
 }
@@ -33,10 +34,16 @@ export function useTelegramSetup() {
       app.ready()
       app.expand()
     })
-    // Произвольный цвет шапки клиент понимает только с 6.9.
-    call('6.9', (app) => app.setHeaderColor?.('#111311'))
-    call('6.1', (app) => app.setBackgroundColor?.('#111311'))
+    paintTelegram(parseTheme(document.documentElement.dataset.theme))
   }, [])
+}
+// Шапку и фон под страницей рисует клиент Telegram — красим их под тему,
+// иначе при смене темы сверху останется полоса прежнего цвета.
+export function paintTelegram(theme: Theme) {
+  const color = themeBackground[theme]
+  // Произвольный цвет шапки клиент понимает только с 6.9.
+  call('6.9', (app) => app.setHeaderColor?.(color))
+  call('6.1', (app) => app.setBackgroundColor?.(color))
 }
 // Нативная стрелка «назад» Telegram ведёт себя так же, как обработчик
 // текущей страницы: шаг назад в мастере, защита от ухода во время запроса.
