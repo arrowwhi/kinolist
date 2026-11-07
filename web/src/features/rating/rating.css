@@ -5,15 +5,13 @@
   gap: 20px;
   padding: 16px;
   background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-edge);
   border-radius: 18px;
 }
 .rating-summary strong {
   font-size: 44px;
   line-height: 1.2;
-  color: var(--color-accent);
-}
-[data-theme='light'] .rating-summary strong {
-  color: var(--color-text);
+  color: var(--color-accent-text);
 }
 .rating-scale {
   display: grid;
@@ -28,12 +26,9 @@
   border-radius: 12px;
 }
 .rating-scale button.is-active {
-  color: var(--color-accent);
+  color: var(--color-accent-text);
   background: var(--color-raised);
   font-weight: 600;
-}
-[data-theme='light'] .rating-scale button.is-active {
-  color: var(--color-text);
 }
 .form-actions {
   margin-top: 20px;

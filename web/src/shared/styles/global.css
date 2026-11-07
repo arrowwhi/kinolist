@@ -86,10 +86,7 @@ small,
   color: var(--color-muted);
 }
 .accent {
-  color: var(--color-accent);
-}
-[data-theme='light'] .accent {
-  color: var(--color-on-accent);
+  color: var(--color-accent-text);
 }
 .stack {
   display: flex;

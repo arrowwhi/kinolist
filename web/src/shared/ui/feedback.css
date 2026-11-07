@@ -8,10 +8,7 @@
 }
 .empty-state__symbol {
   font-size: 40px;
-  color: var(--color-accent);
-}
-[data-theme='light'] .empty-state__symbol {
-  color: var(--color-text);
+  color: var(--color-accent-text);
 }
 .error-state {
   display: flex;
@@ -65,7 +62,7 @@
 .spinner--large {
   width: 32px;
   height: 32px;
-  color: var(--color-accent);
+  color: var(--color-accent-text);
 }
 .skeleton-list {
   display: flex;
