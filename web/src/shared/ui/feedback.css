@@ -37,7 +37,7 @@
 .toast {
   position: fixed;
   z-index: 30;
-  top: max(20px, env(safe-area-inset-top));
+  top: max(20px, calc(var(--app-top-inset) + 8px));
   left: 50%;
   transform: translateX(-50%);
   max-width: calc(100% - 32px);
