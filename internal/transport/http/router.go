@@ -41,11 +41,11 @@ func NewRouter(d RouterDeps) http.Handler {
 	r.Use(middleware.Logger(d.Log))
 	r.Use(middleware.Metrics(d.Metrics))
 
-	// Служебные эндпоинты живут вне таймаута и вне авторизации:
-	// проба готовности не должна зависеть от нагрузки на API.
+	// Служебные эндпоинты живут вне таймаута и вне авторизации.
+	// /metrics здесь нет: он слушает отдельный внутренний порт (NewMetricsHandler),
+	// а проба готовности не должна зависеть от нагрузки на API.
 	r.Get("/healthz", d.Health.Live)
 	r.Get("/readyz", d.Health.Ready)
-	r.Handle("/metrics", promhttp.HandlerFor(d.Metrics.Registry(), promhttp.HandlerOpts{}))
 
 	if d.TelegramWebhook != nil {
 		r.Post(d.Config.Telegram.WebhookPath, d.TelegramWebhook)
@@ -120,4 +120,13 @@ func spaHandler(assets fs.FS) http.Handler {
 
 		files.ServeHTTP(w, r)
 	})
+}
+
+// NewMetricsHandler отдаёт метрики Prometheus. Он монтируется на отдельный
+// адрес METRICS_ADDR, который не публикуется наружу: в публичном роутере
+// /metrics раскрывал бы маршруты и нагрузку всему интернету.
+func NewMetricsHandler(m *metrics.Metrics) http.Handler {
+	mux := http.NewServeMux()
+	mux.Handle("GET /metrics", promhttp.HandlerFor(m.Registry(), promhttp.HandlerOpts{}))
+	return mux
 }

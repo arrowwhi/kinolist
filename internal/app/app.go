@@ -157,6 +157,12 @@ func Run(ctx context.Context, envFile string) error {
 	}
 
 	server := transporthttp.NewServer(cfg.HTTP, transporthttp.NewRouter(routerDeps))
+	var metricsServer *transporthttp.Server
+	if cfg.HTTP.MetricsAddr != "" {
+		metricsCfg := cfg.HTTP
+		metricsCfg.Addr = cfg.HTTP.MetricsAddr
+		metricsServer = transporthttp.NewServer(metricsCfg, transporthttp.NewMetricsHandler(m))
+	}
 	enrichmentWorker := worker.New(enrichmentUC, notifier, log, m, cfg.Worker)
 	directorSync := worker.NewDirectorSync(directorsUC, log, cfg.Directors.SyncInterval, cfg.Directors.SyncBatch)
 
@@ -175,6 +181,13 @@ func Run(ctx context.Context, envFile string) error {
 		log.Info("http server listening", zap.String("addr", cfg.HTTP.Addr))
 		return server.Run()
 	})
+
+	if metricsServer != nil {
+		group.Go(func() error {
+			log.Info("metrics server listening", zap.String("addr", cfg.HTTP.MetricsAddr))
+			return metricsServer.Run()
+		})
+	}
 
 	group.Go(func() error {
 		return enrichmentWorker.Run(groupCtx)
@@ -217,6 +230,11 @@ func Run(ctx context.Context, envFile string) error {
 
 		if err := server.Shutdown(shutdownCtx); err != nil { //nolint:contextcheck // отдельный таймаут: shutdown не должен обрываться вместе с отменённым groupCtx
 			return err
+		}
+		if metricsServer != nil {
+			if err := metricsServer.Shutdown(shutdownCtx); err != nil { //nolint:contextcheck // тот же отдельный таймаут, что и у основного сервера
+				return err
+			}
 		}
 
 		log.Info("http server stopped")

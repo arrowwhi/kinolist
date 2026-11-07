@@ -107,9 +107,10 @@ docker compose -f compose.prod.yml up -d --build
 - [ ] `curl https://kino.example.com/healthz` → `200 {"status":"ok",...}`.
 - [ ] `curl https://kino.example.com/readyz` → `200` (после того как пул
       подключился к БД).
-- [ ] `curl https://kino.example.com/metrics` → `404` (Caddy намеренно не
-      отдаёт метрики наружу; для мониторинга snapshot'ить изнутри сети
-      `docker compose`, например `docker compose exec app curl localhost:8080/metrics`).
+- [ ] `curl https://kino.example.com/metrics` → `404`. Метрики слушают
+      отдельный внутренний порт `METRICS_ADDR` (`:9091`), который не
+      публикуется ни Caddy, ни Coolify; снимать их изнутри сети Docker,
+      например `docker compose exec app wget -qO- localhost:9091/metrics`.
 - [ ] В логах `app` — `telegram webhook registered` без ошибок (`setWebhook`
       принят Telegram).
 - [ ] Сертификат браузером принимается без предупреждений.
