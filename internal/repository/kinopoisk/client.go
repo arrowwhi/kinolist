@@ -15,6 +15,7 @@ import (
 
 	"github.com/arrowwhi/kinolist/internal/config"
 	"github.com/arrowwhi/kinolist/internal/domain/movie"
+	"github.com/arrowwhi/kinolist/internal/pkg/httpclient"
 )
 
 const maxResponseBytes = 4 << 20
@@ -27,7 +28,7 @@ type Client struct {
 
 func New(cfg config.Kinopoisk) *Client {
 	return &Client{
-		http:    &http.Client{Timeout: cfg.Timeout},
+		http:    httpclient.New("kinopoisk", cfg.Timeout),
 		baseURL: strings.TrimSuffix(cfg.BaseURL, "/"),
 		apiKey:  cfg.APIKey,
 	}

@@ -24,6 +24,8 @@ func NewMovieRepository(tx *transactions.Manager) *MovieRepository {
 // Каталог общий для всех пользователей, поэтому повторное добавление того же
 // фильма обновляет данные, а не создаёт дубль.
 func (r *MovieRepository) Upsert(ctx context.Context, m movie.Movie) (saved movie.Movie, err error) {
+	ctx = queryName(ctx, "movie.upsert")
+
 	if _, ok := r.tx.Querier(ctx).(pgx.Tx); ok {
 		return r.upsert(ctx, m)
 	}
@@ -36,6 +38,8 @@ func (r *MovieRepository) Upsert(ctx context.Context, m movie.Movie) (saved movi
 }
 
 func (r *MovieRepository) upsert(ctx context.Context, m movie.Movie) (movie.Movie, error) {
+	ctx = queryName(ctx, "movie.upsert")
+
 	q := r.tx.Querier(ctx)
 	m.MediaType = m.MediaType.Normalize()
 	if !m.MediaType.Valid() {
@@ -141,6 +145,8 @@ func (r *MovieRepository) upsert(ctx context.Context, m movie.Movie) (movie.Movi
 }
 
 func (r *MovieRepository) replaceGenres(ctx context.Context, movieID int64, genres []movie.Genre) error {
+	ctx = queryName(ctx, "movie.replace_genres")
+
 	q := r.tx.Querier(ctx)
 
 	if _, err := q.Exec(ctx, `DELETE FROM movie_genres WHERE movie_id = $1`, movieID); err != nil {
@@ -166,6 +172,8 @@ func (r *MovieRepository) replaceGenres(ctx context.Context, movieID int64, genr
 }
 
 func (r *MovieRepository) GetByTMDBID(ctx context.Context, tmdbID int32, mediaTypes ...movie.MediaType) (movie.Movie, error) {
+	ctx = queryName(ctx, "movie.get_by_tmdb_id")
+
 	const q = `
 		SELECT ` + movieColumns + `
 		FROM movies m
@@ -203,6 +211,8 @@ func (r *MovieRepository) GetByTMDBID(ctx context.Context, tmdbID int32, mediaTy
 // Add кладёт фильм в коллекцию пользователя. Повторное добавление —
 // не ошибка инфраструктуры, а доменное состояние ErrAlreadyInCollection.
 func (r *MovieRepository) Add(ctx context.Context, um movie.UserMovie) (movie.UserMovie, error) {
+	ctx = queryName(ctx, "movie.add")
+
 	// ON CONFLICT DO NOTHING вместо перехвата 23505: нарушение уникальности
 	// внутри транзакции переводит её в aborted, и все последующие запросы
 	// падают уже с ошибкой драйвера, затирая доменную ErrAlreadyInCollection.
@@ -242,6 +252,8 @@ func (r *MovieRepository) Add(ctx context.Context, um movie.UserMovie) (movie.Us
 }
 
 func (r *MovieRepository) Get(ctx context.Context, userID, userMovieID int64) (movie.UserMovie, error) {
+	ctx = queryName(ctx, "movie.get")
+
 	sql, args, err := r.selectUserMovies().
 		Where(squirrel.Eq{"um.user_id": userID, "um.id": userMovieID}).
 		ToSql()
@@ -272,6 +284,8 @@ func (r *MovieRepository) Get(ctx context.Context, userID, userMovieID int64) (m
 }
 
 func (r *MovieRepository) List(ctx context.Context, f movie.Filter) ([]movie.UserMovie, error) {
+	ctx = queryName(ctx, "movie.list")
+
 	f = f.Normalize()
 
 	q := r.applyFilter(r.selectUserMovies(), f).
@@ -323,6 +337,8 @@ func (r *MovieRepository) List(ctx context.Context, f movie.Filter) ([]movie.Use
 }
 
 func (r *MovieRepository) Count(ctx context.Context, f movie.Filter) (int, error) {
+	ctx = queryName(ctx, "movie.count")
+
 	base := builder.Select("count(*)").
 		From("user_movies um").
 		Join("movies m ON m.id = um.movie_id")
@@ -341,6 +357,8 @@ func (r *MovieRepository) Count(ctx context.Context, f movie.Filter) (int, error
 }
 
 func (r *MovieRepository) Update(ctx context.Context, userID, userMovieID int64, upd movie.Update) (movie.UserMovie, error) {
+	ctx = queryName(ctx, "movie.update")
+
 	q := builder.Update("user_movies").
 		Where(squirrel.Eq{"user_id": userID, "id": userMovieID})
 
@@ -396,6 +414,8 @@ func (r *MovieRepository) Update(ctx context.Context, userID, userMovieID int64,
 }
 
 func (r *MovieRepository) Delete(ctx context.Context, userID, userMovieID int64) error {
+	ctx = queryName(ctx, "movie.delete")
+
 	const q = `DELETE FROM user_movies WHERE user_id = $1 AND id = $2`
 
 	tag, err := r.tx.Querier(ctx).Exec(ctx, q, userID, userMovieID)
@@ -410,6 +430,8 @@ func (r *MovieRepository) Delete(ctx context.Context, userID, userMovieID int64)
 }
 
 func (r *MovieRepository) ListGenres(ctx context.Context) ([]movie.Genre, error) {
+	ctx = queryName(ctx, "movie.list_genres")
+
 	const q = `SELECT id, tmdb_id, name_ru, name_en FROM genres ORDER BY name_ru`
 
 	rows, err := r.tx.Querier(ctx).Query(ctx, q)
@@ -422,6 +444,8 @@ func (r *MovieRepository) ListGenres(ctx context.Context) ([]movie.Genre, error)
 }
 
 func (r *MovieRepository) GenresByTMDBIDs(ctx context.Context, tmdbIDs []int32) ([]movie.Genre, error) {
+	ctx = queryName(ctx, "movie.genres_by_tmdb_ids")
+
 	if len(tmdbIDs) == 0 {
 		return nil, nil
 	}
@@ -441,6 +465,8 @@ func (r *MovieRepository) GenresByTMDBIDs(ctx context.Context, tmdbIDs []int32) 
 // маппинга: без неё «фантастика» из Кинопоиска и Science Fiction из TMDB
 // оказались бы разными жанрами.
 func (r *MovieRepository) GenresByExternalNames(ctx context.Context, p movie.Provider, names []string) ([]movie.Genre, error) {
+	ctx = queryName(ctx, "movie.genres_by_external_names")
+
 	if len(names) == 0 {
 		return nil, nil
 	}
@@ -466,6 +492,8 @@ func (r *MovieRepository) GenresByExternalNames(ctx context.Context, p movie.Pro
 }
 
 func (r *MovieRepository) genresForMovies(ctx context.Context, movieIDs []int64) (map[int64][]movie.Genre, error) {
+	ctx = queryName(ctx, "movie.genres_for_movies")
+
 	out := make(map[int64][]movie.Genre, len(movieIDs))
 	if len(movieIDs) == 0 {
 		return out, nil
@@ -610,6 +638,8 @@ func scanUserMovie(row scanner) (movie.UserMovie, error) {
 
 // Summary deliberately excludes search and pagination.
 func (r *MovieRepository) Summary(ctx context.Context, f movie.Filter) (movie.Summary, error) {
+	ctx = queryName(ctx, "movie.summary")
+
 	f.Query = ""
 	q := builder.Select("count(*)", "count(um.user_rating) FILTER (WHERE um.status = 'watched')", "round(avg(um.user_rating) FILTER (WHERE um.status = 'watched'), 1)").From("user_movies um").Join("movies m ON m.id = um.movie_id")
 	sql, args, err := r.applyFilter(q, f).ToSql()
@@ -624,6 +654,8 @@ func (r *MovieRepository) Summary(ctx context.Context, f movie.Filter) (movie.Su
 }
 
 func (r *MovieRepository) CollectionGenres(ctx context.Context, userID int64, mediaTypes ...movie.MediaType) ([]movie.GenreStats, error) {
+	ctx = queryName(ctx, "movie.collection_genres")
+
 	var mt movie.MediaType
 	if len(mediaTypes) > 0 {
 		mt = mediaTypes[0]
@@ -632,6 +664,8 @@ func (r *MovieRepository) CollectionGenres(ctx context.Context, userID int64, me
 }
 
 func (r *MovieRepository) CollectionGenresFiltered(ctx context.Context, f movie.Filter) ([]movie.GenreStats, error) {
+	ctx = queryName(ctx, "movie.collection_genres_filtered")
+
 	if f.MediaType != "" && !f.MediaType.Valid() {
 		return nil, movie.ErrInvalidMediaType
 	}
@@ -665,6 +699,8 @@ func (r *MovieRepository) CollectionGenresFiltered(ctx context.Context, f movie.
 // Statistics reads all counters in a single database snapshot. No catalogue join
 // is needed: each user_movies row represents one film or one complete series.
 func (r *MovieRepository) Statistics(ctx context.Context, userID int64) (movie.Statistics, error) {
+	ctx = queryName(ctx, "movie.statistics")
+
 	const query = `SELECT count(*),
  count(*) FILTER (WHERE status='want_to_watch'),
  count(*) FILTER (WHERE status='watched')

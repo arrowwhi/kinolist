@@ -10,18 +10,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	infrapg "github.com/arrowwhi/infrastructure/connections/postgres"
+
+	"github.com/arrowwhi/kinolist/internal/config"
+	"github.com/arrowwhi/kinolist/internal/repository/postgres"
 	"github.com/arrowwhi/kinolist/migrations"
 	"github.com/arrowwhi/kinolist/pkg/transactions"
 )
 
-var testPool *pgxpool.Pool
+var testPool *infrapg.Pool
 
 func TestMain(m *testing.M) {
 	os.Exit(runTests(m))
@@ -58,7 +61,7 @@ func runTests(m *testing.M) int {
 		return 1
 	}
 
-	testPool, err = pgxpool.New(ctx, dsn)
+	testPool, err = postgres.NewPool(ctx, config.Postgres{DSN: dsn, MaxConns: 10, MinConns: 1})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "pool: %v\n", err)
 		return 1

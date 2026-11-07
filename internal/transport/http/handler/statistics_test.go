@@ -48,7 +48,7 @@ func TestStatisticsHTTPScopesUserAndIgnoresListParameters(t *testing.T) {
 		uc := &statisticsStub{stats: stats}
 		handler := NewMovie(uc)
 		authenticated := middleware.TelegramAuth("test-token", func(context.Context, middleware.Identity) (int64, error) { return 7, nil })(http.HandlerFunc(handler.Statistics))
-		r := httptest.NewRequest("GET", "/api/v1/statistics?user_id=999&media_type=tv&status=watched&genre_ids=18&q=no-match&limit=1", nil)
+		r := httptest.NewRequestWithContext(context.Background(), "GET", "/api/v1/statistics?user_id=999&media_type=tv&status=watched&genre_ids=18&q=no-match&limit=1", nil)
 		r.Header.Set("X-Telegram-Init-Data", statisticsInitData())
 		w := httptest.NewRecorder()
 		authenticated.ServeHTTP(w, r)
@@ -69,7 +69,7 @@ func TestStatisticsHTTPRequiresAuth(t *testing.T) {
 	uc := &statisticsStub{}
 	handler := NewMovie(uc)
 	w := httptest.NewRecorder()
-	handler.Statistics(w, httptest.NewRequest("GET", "/api/v1/statistics", nil))
+	handler.Statistics(w, httptest.NewRequestWithContext(context.Background(), "GET", "/api/v1/statistics", nil))
 	if w.Code != 401 || uc.calls != 0 {
 		t.Fatalf("unauthenticated response: %d, calls %d", w.Code, uc.calls)
 	}
@@ -79,7 +79,7 @@ func TestStatisticsHTTPHidesDatabaseErrors(t *testing.T) {
 	uc := &statisticsStub{err: errors.New("private database error")}
 	handler := NewMovie(uc)
 	authenticated := middleware.TelegramAuth("test-token", func(context.Context, middleware.Identity) (int64, error) { return 7, nil })(http.HandlerFunc(handler.Statistics))
-	r := httptest.NewRequest("GET", "/api/v1/statistics", nil)
+	r := httptest.NewRequestWithContext(context.Background(), "GET", "/api/v1/statistics", nil)
 	r.Header.Set("X-Telegram-Init-Data", statisticsInitData())
 	w := httptest.NewRecorder()
 	authenticated.ServeHTTP(w, r)

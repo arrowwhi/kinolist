@@ -1,22 +1,29 @@
 // Package transactions даёт репозиториям единый способ работать как внутри
 // транзакции, так и вне её: usecase открывает транзакцию, а репозиторий
 // сам достаёт её из контекста и ничего не знает о вызывающем.
+//
+// Транзакции открывает пул коннектора инфраструктуры
+// (github.com/arrowwhi/infrastructure/connections/postgres): он сам кладёт
+// транзакцию в контекст и направляет в неё запросы, поэтому Querier может
+// всегда отдавать пул. Менеджер добавляет поверх него семантику «владельца»:
+// вложенный BeginTransaction переиспользует внешнюю транзакцию, а коммитит
+// только тот, кто её открыл.
 package transactions
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
+
+	infrapg "github.com/arrowwhi/infrastructure/connections/postgres"
 )
 
 type ctxKey struct{}
 
-// DB покрывает и *pgxpool.Pool, и pgx.Tx — репозитории принимают только его
-// и потому одинаково работают внутри транзакции и вне неё.
+// DB — то, чем пользуются репозитории. Пул коннектора сам выполняет запрос в
+// транзакции из контекста, если она там есть.
 type DB interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
@@ -24,42 +31,45 @@ type DB interface {
 }
 
 type Manager struct {
-	pool *pgxpool.Pool
+	pool *infrapg.Pool
 }
 
-func NewManager(pool *pgxpool.Pool) *Manager {
+func NewManager(pool *infrapg.Pool) *Manager {
 	return &Manager{pool: pool}
 }
 
 // BeginTransaction открывает транзакцию и кладёт её в контекст.
 // Возвращённый контекст обязан быть передан в FinishTransaction.
 func (m *Manager) BeginTransaction(ctx context.Context) (context.Context, error) {
-	if h, ok := txFrom(ctx); ok {
+	if _, ok := ctx.Value(ctxKey{}).(*holder); ok {
 		// Вложенный вызов переиспользует внешнюю транзакцию, но без права
 		// владельца: его FinishTransaction станет no-op, коммитит внешний.
-		return context.WithValue(ctx, ctxKey{}, &holder{tx: h.tx, owner: false}), nil
+		return context.WithValue(ctx, ctxKey{}, &holder{}), nil
 	}
 
-	tx, err := m.pool.Begin(ctx)
+	txCtx, tx, err := m.pool.Begin(ctx)
 	if err != nil {
 		return ctx, fmt.Errorf("begin transaction: %w", err)
 	}
 
-	return context.WithValue(ctx, ctxKey{}, &holder{tx: tx, owner: true}), nil
+	return context.WithValue(txCtx, ctxKey{}, &holder{tx: tx}), nil
 }
 
 // FinishTransaction коммитит транзакцию при *errPtr == nil и откатывает иначе.
 // Вызывается через defer: defer m.FinishTransaction(ctx, &err).
 func (m *Manager) FinishTransaction(ctx context.Context, errPtr *error) {
-	h, ok := txFrom(ctx)
-	if !ok || !h.owner {
+	h, ok := ctx.Value(ctxKey{}).(*holder)
+	if !ok || h.tx == nil {
 		return
 	}
 
 	if *errPtr != nil {
-		if rbErr := h.tx.Rollback(ctx); rbErr != nil && !errors.Is(rbErr, pgx.ErrTxClosed) {
+		// Откат — в контексте без отмены: исходный мог уже истечь, и тогда
+		// ROLLBACK не дошёл бы до базы, а соединение вернулось бы в пул грязным.
+		if rbErr := h.tx.Rollback(context.WithoutCancel(ctx)); rbErr != nil {
 			*errPtr = fmt.Errorf("%w (rollback failed: %w)", *errPtr, rbErr)
 		}
+
 		return
 	}
 
@@ -68,22 +78,15 @@ func (m *Manager) FinishTransaction(ctx context.Context, errPtr *error) {
 	}
 }
 
-// Querier отдаёт транзакцию из контекста, если она есть, иначе пул.
-func (m *Manager) Querier(ctx context.Context) DB {
-	if h, ok := txFrom(ctx); ok {
-		return h.tx
-	}
+// Querier возвращает пул: запросы с контекстом транзакции он сам направляет в неё.
+func (m *Manager) Querier(context.Context) DB {
 	return m.pool
 }
 
-func (m *Manager) Pool() *pgxpool.Pool { return m.pool }
+// Pool возвращает пул коннектора.
+func (m *Manager) Pool() *infrapg.Pool { return m.pool }
 
+// holder отмечает контекст с транзакцией. tx == nil — вложенный вызов без права владельца.
 type holder struct {
-	tx    pgx.Tx
-	owner bool
-}
-
-func txFrom(ctx context.Context) (*holder, bool) {
-	h, ok := ctx.Value(ctxKey{}).(*holder)
-	return h, ok && h != nil
+	tx *infrapg.Tx
 }

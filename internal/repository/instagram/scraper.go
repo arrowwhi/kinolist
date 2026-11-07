@@ -18,6 +18,7 @@ import (
 
 	"github.com/arrowwhi/kinolist/internal/config"
 	"github.com/arrowwhi/kinolist/internal/domain/enrichment"
+	"github.com/arrowwhi/kinolist/internal/pkg/httpclient"
 )
 
 const maxResponseBytes = 8 << 20
@@ -31,7 +32,7 @@ type Scraper struct {
 
 func New(cfg config.Instagram) *Scraper {
 	return &Scraper{
-		http:    &http.Client{Timeout: cfg.Timeout},
+		http:    httpclient.New("instagram", cfg.Timeout),
 		baseURL: strings.TrimSuffix(cfg.BaseURL, "/"),
 		apiKey:  cfg.APIKey,
 		enabled: cfg.Enabled(),

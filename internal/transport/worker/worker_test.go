@@ -7,8 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/arrowwhi/kinolist/internal/config"
 	"github.com/arrowwhi/kinolist/internal/domain/enrichment"
 	"github.com/arrowwhi/kinolist/internal/domain/movie"
@@ -125,7 +123,7 @@ func TestWorkerProcessesAndNotifies(t *testing.T) {
 	}}
 	n := &stubNotifier{}
 
-	w := worker.New(uc, n, zap.NewNop(), metrics.New(), testConfig())
+	w := worker.New(uc, n, newMetrics(t), testConfig())
 	runUntil(t, w, func() bool { return n.count() == 3 })
 
 	if got := len(uc.processedIDs()); got != 3 {
@@ -143,7 +141,7 @@ func TestWorkerDoesNotNotifyOnScheduledRetry(t *testing.T) {
 	}
 	n := &stubNotifier{}
 
-	w := worker.New(uc, n, zap.NewNop(), metrics.New(), testConfig())
+	w := worker.New(uc, n, newMetrics(t), testConfig())
 	runUntil(t, w, func() bool { return len(uc.processedIDs()) == 1 })
 
 	if n.count() != 0 {
@@ -160,7 +158,7 @@ func TestWorkerSurvivesProcessingErrors(t *testing.T) {
 	}
 	n := &stubNotifier{}
 
-	w := worker.New(uc, n, zap.NewNop(), metrics.New(), testConfig())
+	w := worker.New(uc, n, newMetrics(t), testConfig())
 	runUntil(t, w, func() bool { return len(uc.processedIDs()) == 2 })
 
 	if n.count() != 0 {
@@ -171,7 +169,7 @@ func TestWorkerSurvivesProcessingErrors(t *testing.T) {
 func TestWorkerStopsCleanlyWithNoWork(t *testing.T) {
 	t.Parallel()
 
-	w := worker.New(&stubUseCase{}, &stubNotifier{}, zap.NewNop(), metrics.New(), testConfig())
+	w := worker.New(&stubUseCase{}, &stubNotifier{}, newMetrics(t), testConfig())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
@@ -190,7 +188,7 @@ func (f fakeDirectorSync) SyncStale(_ context.Context, limit int) (int, error) {
 
 func TestDirectorSyncRunsImmediatelyAndStops(t *testing.T) {
 	calls := make(chan int, 4)
-	s := worker.NewDirectorSync(fakeDirectorSync{calls: calls}, zap.NewNop(), time.Hour, 7)
+	s := worker.NewDirectorSync(fakeDirectorSync{calls: calls}, time.Hour, 7)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- s.Run(ctx) }()
@@ -211,4 +209,15 @@ func TestDirectorSyncRunsImmediatelyAndStops(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("sync did not stop")
 	}
+}
+
+func newMetrics(t *testing.T) *metrics.Metrics {
+	t.Helper()
+
+	m, err := metrics.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return m
 }

@@ -22,6 +22,17 @@ type Config struct {
 	Kinopoisk Kinopoisk
 	Instagram Instagram
 	LLM       LLM
+	Tracing   Tracing
+}
+
+// Tracing — экспорт трейсов OpenTelemetry. По умолчанию выключен: без коллектора
+// экспортёр только шумит ошибками.
+type Tracing struct {
+	Enabled      bool
+	Exporter     string
+	Endpoint     string
+	Insecure     bool
+	SamplingRate float64
 }
 
 type App struct {
@@ -45,12 +56,13 @@ type HTTP struct {
 }
 
 type Postgres struct {
-	DSN               string
-	MaxConns          int32
-	MinConns          int32
-	MaxConnLifetime   time.Duration
-	MaxConnIdleTime   time.Duration
-	HealthCheckPeriod time.Duration
+	DSN             string
+	MaxConns        int32
+	MinConns        int32
+	MaxConnLifetime time.Duration
+	MaxConnIdleTime time.Duration
+	// SlowQueryThreshold — запросы дольше порога пишутся в лог warn-записью; 0 выключает.
+	SlowQueryThreshold time.Duration
 }
 
 type Telegram struct {
@@ -59,6 +71,10 @@ type Telegram struct {
 	WebhookPath   string
 	WebhookSecret string
 	PollTimeout   time.Duration
+	// Workers — сколько чатов обрабатывается параллельно (внутри чата — строго по порядку).
+	Workers int
+	// APIURL — адрес Bot API: свой telegram-bot-api сервер или заглушка в тестах.
+	APIURL string
 }
 
 func (t Telegram) IsWebhook() bool { return t.Mode == ModeWebhook }
@@ -140,12 +156,12 @@ func Load(path string) (*Config, error) {
 			MetricsAddr:    p.str("METRICS_ADDR", ":9091"),
 		},
 		Postgres: Postgres{
-			DSN:               p.str("POSTGRES_DSN", ""),
-			MaxConns:          int32(p.int("POSTGRES_MAX_CONNS", 10)), //nolint:gosec // размер пула соединений не выходит за диапазон int32
-			MinConns:          int32(p.int("POSTGRES_MIN_CONNS", 2)),  //nolint:gosec // размер пула соединений не выходит за диапазон int32
-			MaxConnLifetime:   p.duration("POSTGRES_MAX_CONN_LIFETIME", time.Hour),
-			MaxConnIdleTime:   p.duration("POSTGRES_MAX_CONN_IDLE_TIME", 30*time.Minute),
-			HealthCheckPeriod: p.duration("POSTGRES_HEALTH_CHECK_PERIOD", time.Minute),
+			DSN:                p.str("POSTGRES_DSN", ""),
+			MaxConns:           int32(p.int("POSTGRES_MAX_CONNS", 10)), //nolint:gosec // размер пула соединений не выходит за диапазон int32
+			MinConns:           int32(p.int("POSTGRES_MIN_CONNS", 2)),  //nolint:gosec // размер пула соединений не выходит за диапазон int32
+			MaxConnLifetime:    p.duration("POSTGRES_MAX_CONN_LIFETIME", time.Hour),
+			MaxConnIdleTime:    p.duration("POSTGRES_MAX_CONN_IDLE_TIME", 30*time.Minute),
+			SlowQueryThreshold: p.duration("POSTGRES_SLOW_QUERY_THRESHOLD", 200*time.Millisecond),
 		},
 		Telegram: Telegram{
 			BotToken:      p.str("TELEGRAM_BOT_TOKEN", ""),
@@ -153,6 +169,8 @@ func Load(path string) (*Config, error) {
 			WebhookPath:   p.str("TELEGRAM_WEBHOOK_PATH", "/telegram/webhook"),
 			WebhookSecret: p.str("TELEGRAM_WEBHOOK_SECRET", ""),
 			PollTimeout:   p.duration("TELEGRAM_POLL_TIMEOUT", 30*time.Second),
+			Workers:       p.int("TELEGRAM_WORKERS", 8),
+			APIURL:        p.str("TELEGRAM_API_URL", "https://api.telegram.org"),
 		},
 		Worker: Worker{
 			Concurrency:  p.int("WORKER_CONCURRENCY", 2),
@@ -187,6 +205,13 @@ func Load(path string) (*Config, error) {
 			BaseURL: p.str("LLM_BASE_URL", "https://api.anthropic.com"),
 			Model:   p.str("LLM_MODEL", "claude-haiku-4-5-20251001"),
 			Timeout: p.duration("LLM_TIMEOUT", 30*time.Second),
+		},
+		Tracing: Tracing{
+			Enabled:      p.bool("OTEL_ENABLED", false),
+			Exporter:     p.str("OTEL_EXPORTER", "otlp-grpc"),
+			Endpoint:     p.str("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:4317"),
+			Insecure:     p.bool("OTEL_EXPORTER_OTLP_INSECURE", true),
+			SamplingRate: p.float("OTEL_SAMPLING_RATE", 1.0),
 		},
 	}
 
@@ -230,6 +255,17 @@ func (c *Config) validate() error {
 
 	if c.Postgres.MaxConns < c.Postgres.MinConns {
 		problems = append(problems, "POSTGRES_MAX_CONNS must be >= POSTGRES_MIN_CONNS")
+	}
+	switch c.Tracing.Exporter {
+	case "otlp-grpc", "otlp-http", "stdout":
+	default:
+		problems = append(problems, "OTEL_EXPORTER must be one of: otlp-grpc, otlp-http, stdout")
+	}
+	if c.Tracing.SamplingRate < 0 || c.Tracing.SamplingRate > 1 {
+		problems = append(problems, "OTEL_SAMPLING_RATE must be between 0 and 1")
+	}
+	if c.Telegram.Workers < 1 {
+		problems = append(problems, "TELEGRAM_WORKERS must be >= 1")
 	}
 	if c.Worker.Concurrency < 1 {
 		problems = append(problems, "WORKER_CONCURRENCY must be >= 1")
@@ -279,6 +315,32 @@ func (p *parser) duration(key string, def time.Duration) time.Duration {
 	v, err := time.ParseDuration(raw)
 	if err != nil {
 		p.problems = append(p.problems, fmt.Sprintf("%s: %q is not a duration (e.g. 10s, 1h)", key, raw))
+		return def
+	}
+	return v
+}
+
+func (p *parser) bool(key string, def bool) bool {
+	raw, ok := os.LookupEnv(key)
+	if !ok || raw == "" {
+		return def
+	}
+	v, err := strconv.ParseBool(raw)
+	if err != nil {
+		p.problems = append(p.problems, fmt.Sprintf("%s: %q is not a boolean (true/false)", key, raw))
+		return def
+	}
+	return v
+}
+
+func (p *parser) float(key string, def float64) float64 {
+	raw, ok := os.LookupEnv(key)
+	if !ok || raw == "" {
+		return def
+	}
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		p.problems = append(p.problems, fmt.Sprintf("%s: %q is not a number", key, raw))
 		return def
 	}
 	return v

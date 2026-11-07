@@ -1,57 +1,59 @@
+// Package logger — тонкая обёртка над логгером инфраструктуры
+// (github.com/arrowwhi/infrastructure/observability/logger).
+//
+// Логгер глобальный и берёт поля из контекста: trace_id/span_id активного спана
+// добавляет инфраструктура, а поля запроса или задачи (request_id, job_id, user_id)
+// кладутся в контекст через With и попадают во все записи ниже по стеку — нижним
+// слоям не нужно получать логгер отдельным параметром.
 package logger
 
 import (
 	"context"
-	"fmt"
 
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
+	"github.com/rs/zerolog"
+
+	infra "github.com/arrowwhi/infrastructure/observability/logger"
 )
 
-type ctxKey struct{}
+type fieldsKey struct{}
 
-// New собирает логгер: в проде JSON, локально — человекочитаемый текст.
-func New(env, level string) (*zap.Logger, error) {
-	lvl, err := zapcore.ParseLevel(level)
-	if err != nil {
-		return nil, fmt.Errorf("parse log level %q: %w", level, err)
-	}
-
-	var cfg zap.Config
-	if env == "prod" {
-		cfg = zap.NewProductionConfig()
-	} else {
-		cfg = zap.NewDevelopmentConfig()
-		cfg.Encoding = "console"
-		cfg.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
-	}
-	cfg.Level = zap.NewAtomicLevelAt(lvl)
-	cfg.EncoderConfig.TimeKey = "ts"
-	cfg.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
-
-	log, err := cfg.Build(zap.AddCaller(), zap.AddStacktrace(zapcore.ErrorLevel))
-	if err != nil {
-		return nil, fmt.Errorf("build logger: %w", err)
-	}
-
-	return log, nil
+type field struct {
+	value any
+	key   string
 }
 
-// Into кладёт логгер в контекст, чтобы нижние слои писали с теми же полями
-// (request_id, user_id), не получая логгер отдельным параметром.
-func Into(ctx context.Context, log *zap.Logger) context.Context {
-	return context.WithValue(ctx, ctxKey{}, log)
+// Init настраивает глобальный логгер инфраструктуры и подключает поля из контекста.
+// Вызывается один раз на старте (это делает telegram/app.New — здесь только извлечение полей).
+func Init() {
+	infra.SetContextExtractor(func(evt *zerolog.Event, ctx context.Context) *zerolog.Event {
+		fields, _ := ctx.Value(fieldsKey{}).([]field)
+		for _, f := range fields {
+			evt = evt.Interface(f.key, f.value)
+		}
+
+		return evt
+	})
 }
 
-// From достаёт логгер из контекста; если его там нет — возвращает no-op,
-// чтобы отсутствие логгера никогда не роняло обработчик.
-func From(ctx context.Context) *zap.Logger {
-	if log, ok := ctx.Value(ctxKey{}).(*zap.Logger); ok && log != nil {
-		return log
-	}
-	return zap.NewNop()
+// With возвращает контекст, записи из которого будут содержать поле key=value.
+func With(ctx context.Context, key string, value any) context.Context {
+	prev, _ := ctx.Value(fieldsKey{}).([]field)
+
+	fields := make([]field, 0, len(prev)+1)
+	fields = append(fields, prev...)
+	fields = append(fields, field{key: key, value: value})
+
+	return context.WithValue(ctx, fieldsKey{}, fields)
 }
 
-func With(ctx context.Context, fields ...zap.Field) context.Context {
-	return Into(ctx, From(ctx).With(fields...))
+func Debug(ctx context.Context) *zerolog.Event { return infra.Debug(ctx) }
+func Info(ctx context.Context) *zerolog.Event  { return infra.Info(ctx) }
+func Warn(ctx context.Context) *zerolog.Event  { return infra.Warn(ctx) }
+func Error(ctx context.Context) *zerolog.Event { return infra.Error(ctx) }
+
+// WarnDetached — warn-запись без контекста, для мест, где контекста нет и не будет
+// (например, ошибка записи ответа после отправки заголовков).
+func WarnDetached() *zerolog.Event {
+	l := infra.With().Logger()
+	return l.Warn()
 }

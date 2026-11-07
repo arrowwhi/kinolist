@@ -21,6 +21,8 @@ const userColumns = "id, telegram_id, coalesce(username, ''), coalesce(first_nam
 // EnsureExists заводит пользователя при первом обращении и обновляет
 // профиль при последующих: имя и username в Telegram меняются.
 func (r *UserRepository) EnsureExists(ctx context.Context, u user.User) (user.User, error) {
+	ctx = queryName(ctx, "user.ensure_exists")
+
 	const q = `
 		INSERT INTO users (telegram_id, username, first_name, language_code)
 		VALUES ($1, $2, $3, $4)
@@ -47,6 +49,8 @@ func (r *UserRepository) EnsureExists(ctx context.Context, u user.User) (user.Us
 }
 
 func (r *UserRepository) GetByTelegramID(ctx context.Context, telegramID int64) (user.User, error) {
+	ctx = queryName(ctx, "user.get_by_telegram_id")
+
 	const q = `SELECT ` + userColumns + ` FROM users WHERE telegram_id = $1`
 
 	out, err := scanUser(r.tx.Querier(ctx).QueryRow(ctx, q, telegramID))
@@ -61,6 +65,8 @@ func (r *UserRepository) GetByTelegramID(ctx context.Context, telegramID int64) 
 }
 
 func (r *UserRepository) GetByID(ctx context.Context, id int64) (user.User, error) {
+	ctx = queryName(ctx, "user.get_by_id")
+
 	const q = `SELECT ` + userColumns + ` FROM users WHERE id = $1`
 
 	out, err := scanUser(r.tx.Querier(ctx).QueryRow(ctx, q, id))

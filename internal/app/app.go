@@ -1,23 +1,24 @@
-// Package app собирает зависимости вручную, запускает компоненты и
-// останавливает их в правильном порядке.
+// Package app собирает зависимости вручную и запускает их на инфраструктуре
+// github.com/arrowwhi/infrastructure: telegram/app отвечает за логи, метрики,
+// трейсинг, служебный порт и порядок остановки, здесь — только wiring kinolist.
 package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net/http"
-	"os/signal"
-	"syscall"
+	"net"
 	"time"
 
-	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
+	"github.com/arrowwhi/infrastructure/observability/logger"
+	"github.com/arrowwhi/infrastructure/observability/metrics"
+	"github.com/arrowwhi/infrastructure/observability/tracing"
+	infraapp "github.com/arrowwhi/infrastructure/telegram/app"
+	tgbot "github.com/arrowwhi/infrastructure/telegram/bot"
 
 	"github.com/arrowwhi/kinolist/internal/config"
 	"github.com/arrowwhi/kinolist/internal/domain/user"
-	"github.com/arrowwhi/kinolist/internal/pkg/logger"
-	"github.com/arrowwhi/kinolist/internal/pkg/metrics"
+	kllog "github.com/arrowwhi/kinolist/internal/pkg/logger"
+	kmetrics "github.com/arrowwhi/kinolist/internal/pkg/metrics"
 	"github.com/arrowwhi/kinolist/internal/repository/instagram"
 	"github.com/arrowwhi/kinolist/internal/repository/kinopoisk"
 	"github.com/arrowwhi/kinolist/internal/repository/llm"
@@ -34,6 +35,8 @@ import (
 	"github.com/arrowwhi/kinolist/pkg/transactions"
 	"github.com/arrowwhi/kinolist/web"
 )
+
+const serviceName = "kinolist"
 
 // Значения прошиваются линкером через -ldflags -X.
 var (
@@ -53,42 +56,36 @@ func Run(ctx context.Context, envFile string) error {
 		return err
 	}
 
-	log, err := logger.New(cfg.App.Env, cfg.App.LogLevel)
+	a, err := infraapp.New(ctx, infraConfig(cfg))
 	if err != nil {
 		return err
 	}
-	defer func() { _ = log.Sync() }()
-	zap.ReplaceGlobals(log)
 
-	log.Info("starting kinolist",
-		zap.String("version", version),
-		zap.String("commit", commit),
-		zap.String("env", cfg.App.Env),
-		zap.String("telegram_mode", cfg.Telegram.Mode),
-	)
+	kllog.Init()
 
-	closer := NewCloser()
-	defer func() { //nolint:contextcheck // отдельный таймаут: закрытие ресурсов не должно обрываться вместе с отменённым основным контекстом
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.App.ShutdownTimeout)
-		defer cancel()
-
-		if err := closer.Close(shutdownCtx); err != nil {
-			log.Error("shutdown completed with errors", zap.Error(err))
-		}
-	}()
+	logger.Info(ctx).
+		Str("commit", commit).
+		Str("telegram_mode", cfg.Telegram.Mode).
+		Bool("tracing", cfg.Tracing.Enabled).
+		Msg("starting kinolist")
 
 	// --- инфраструктура ---
 	pool, err := postgres.NewPool(ctx, cfg.Postgres)
 	if err != nil {
+		_ = a.Shutdown(ctx)
 		return err
 	}
-	closer.Add("postgres pool", func(context.Context) error {
+	a.OnShutdown(func(context.Context) error {
 		pool.Close()
 		return nil
 	})
+	a.Health().Register("postgres", pool.Healthcheck)
 
-	m := metrics.New()
-	m.RegisterPool(pool)
+	m, err := kmetrics.New()
+	if err != nil {
+		_ = a.Shutdown(ctx)
+		return err
+	}
 
 	txManager := transactions.NewManager(pool)
 
@@ -116,13 +113,13 @@ func Run(ctx context.Context, envFile string) error {
 		enrichDeps.Fallback = kinopoiskClient
 		directorDeps.Names = kinopoiskClient
 	} else {
-		log.Warn("kinopoisk fallback is disabled: KINOPOISK_API_KEY is not set")
+		logger.Warn(ctx).Msg("kinopoisk fallback is disabled: KINOPOISK_API_KEY is not set")
 	}
 	if !fetcher.Enabled() {
-		log.Warn("instagram scraper is disabled: reel links will be rejected, only titles work")
+		logger.Warn(ctx).Msg("instagram scraper is disabled: reel links will be rejected, only titles work")
 	}
 	if !extractor.Enabled() {
-		log.Warn("title extractor is disabled: reel links will be rejected, only titles work")
+		logger.Warn(ctx).Msg("title extractor is disabled: reel links will be rejected, only titles work")
 	}
 
 	// --- usecase ---
@@ -130,21 +127,36 @@ func Run(ctx context.Context, envFile string) error {
 	enrichmentUC := enrichmentuc.New(enrichDeps)
 	directorsUC := directorsuc.New(directorDeps)
 
-	// --- транспорт ---
-	botAPI := telegram.NewAPI(cfg.Telegram.BotToken, cfg.Telegram.PollTimeout)
-	bot := telegram.NewBot(botAPI, enrichmentUC, collectionUC, log, webAppURL(cfg))
-	notifier := telegram.NewNotifier(botAPI, log)
+	// --- telegram ---
+	bot, err := tgbot.New(botConfig(cfg),
+		tgbot.WithErrorHandler(tgbot.ReplyOnError("⚠️ Что-то пошло не так. Попробуйте ещё раз.")))
+	if err != nil {
+		_ = a.Shutdown(ctx)
+		return err
+	}
 
-	health := handler.NewHealth(pool, version)
+	handlers := telegram.NewBot(enrichmentUC, collectionUC, webAppURL(cfg))
+	handlers.Register(bot)
+
+	if err := handlers.SetupMenuButton(ctx, bot.API()); err != nil {
+		// Кнопка меню — украшение; без неё бот полностью работоспособен.
+		logger.Warn(ctx).Err(err).Msg("set chat menu button failed")
+	}
+
+	notifier := telegram.NewNotifier(bot.API())
+
+	// --- http ---
+	health := handler.NewHealth(a.Health(), version)
 
 	assets, err := web.Assets()
 	if err != nil {
-		log.Warn("mini app assets are not embedded, serving api only", zap.Error(err))
+		logger.Warn(ctx).Err(err).Msg("mini app assets are not embedded, serving api only")
 		assets = nil
 	}
 
 	routerDeps := transporthttp.RouterDeps{
-		Config: cfg, Log: log, Metrics: m,
+		Config:      cfg,
+		ServiceName: serviceName,
 		Movies:      handler.NewMovie(collectionUC),
 		Jobs:        handler.NewEnrichment(enrichmentUC),
 		Directors:   handler.NewDirectors(directorsUC),
@@ -153,72 +165,47 @@ func Run(ctx context.Context, envFile string) error {
 		ResolveUser: resolveUserFunc(collectionUC),
 	}
 	if cfg.Telegram.IsWebhook() {
-		routerDeps.TelegramWebhook = telegram.WebhookHandler(bot, cfg.Telegram.WebhookSecret, log)
+		// Обновления приходят на публичный HTTP-сервер (за Caddy), бот только
+		// регистрирует webhook и обрабатывает очередь.
+		routerDeps.TelegramWebhook = bot.WebhookHandler()
 	}
 
 	server := transporthttp.NewServer(cfg.HTTP, transporthttp.NewRouter(routerDeps))
-	var metricsServer *transporthttp.Server
-	if cfg.HTTP.MetricsAddr != "" {
-		metricsCfg := cfg.HTTP
-		metricsCfg.Addr = cfg.HTTP.MetricsAddr
-		metricsServer = transporthttp.NewServer(metricsCfg, transporthttp.NewMetricsHandler(m))
-	}
-	enrichmentWorker := worker.New(enrichmentUC, notifier, log, m, cfg.Worker)
-	directorSync := worker.NewDirectorSync(directorsUC, log, cfg.Directors.SyncInterval, cfg.Directors.SyncBatch)
-
-	if err := bot.Setup(ctx); err != nil {
-		// Меню и команды — украшение; без них бот полностью работоспособен.
-		log.Warn("bot setup failed", zap.Error(err))
-	}
 
 	// --- запуск ---
-	runCtx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
+	return a.Run(ctx,
+		httpComponent(server, health, cfg),
+		worker.New(enrichmentUC, notifier, m, cfg.Worker),
+		worker.NewDirectorSync(directorsUC, cfg.Directors.SyncInterval, cfg.Directors.SyncBatch),
+		bot,
+	)
+}
 
-	group, groupCtx := errgroup.WithContext(runCtx)
+// readinessDrainDelay — сколько ждать между переводом /readyz в ошибку и
+// закрытием сервера.
+const readinessDrainDelay = 2 * time.Second
 
-	group.Go(func() error {
-		log.Info("http server listening", zap.String("addr", cfg.HTTP.Addr))
-		return server.Run()
-	})
+// httpComponent запускает публичный HTTP-сервер. Порядок остановки: /readyz
+// начинает отвечать ошибкой, балансировщик уводит трафик, и только потом
+// закрывается приём запросов.
+func httpComponent(server *transporthttp.Server, health *handler.Health, cfg *config.Config) infraapp.ComponentFunc {
+	return func(ctx context.Context) error {
+		errCh := make(chan error, 1)
 
-	if metricsServer != nil {
-		group.Go(func() error {
-			log.Info("metrics server listening", zap.String("addr", cfg.HTTP.MetricsAddr))
-			return metricsServer.Run()
-		})
-	}
+		go func() {
+			logger.Info(ctx).Str("addr", cfg.HTTP.Addr).Msg("http server listening")
+			errCh <- server.Run()
+		}()
 
-	group.Go(func() error {
-		return enrichmentWorker.Run(groupCtx)
-	})
-
-	group.Go(func() error {
-		return directorSync.Run(groupCtx)
-	})
-
-	if cfg.Telegram.IsWebhook() {
-		url := cfg.HTTP.PublicURL + cfg.Telegram.WebhookPath
-		if err := botAPI.SetWebhook(ctx, url, cfg.Telegram.WebhookSecret); err != nil {
-			return fmt.Errorf("set telegram webhook: %w", err)
+		select {
+		case err := <-errCh:
+			return err
+		case <-ctx.Done():
 		}
-		log.Info("telegram webhook registered", zap.String("url", url))
-	} else {
-		poller := telegram.NewPoller(botAPI, bot, log, cfg.Telegram.PollTimeout)
-		group.Go(func() error {
-			return poller.Run(groupCtx)
-		})
-	}
 
-	// Порядок остановки: /readyz начинает отвечать ошибкой, балансировщик
-	// уводит трафик, и только потом закрывается приём запросов.
-	group.Go(func() error {
-		<-groupCtx.Done()
-
-		log.Info("shutdown signal received")
 		health.SetReady(false)
 
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.App.ShutdownTimeout)
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cfg.App.ShutdownTimeout)
 		defer cancel()
 
 		// Пауза даёт балансировщику увидеть новый статус readiness
@@ -228,30 +215,66 @@ func Run(ctx context.Context, envFile string) error {
 		case <-shutdownCtx.Done():
 		}
 
-		if err := server.Shutdown(shutdownCtx); err != nil { //nolint:contextcheck // отдельный таймаут: shutdown не должен обрываться вместе с отменённым groupCtx
+		if err := server.Shutdown(shutdownCtx); err != nil {
 			return err
 		}
-		if metricsServer != nil {
-			if err := metricsServer.Shutdown(shutdownCtx); err != nil { //nolint:contextcheck // тот же отдельный таймаут, что и у основного сервера
-				return err
-			}
-		}
 
-		log.Info("http server stopped")
-		return nil
-	})
+		logger.Info(ctx).Msg("http server stopped")
 
-	if err := group.Wait(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return err
+		return <-errCh
 	}
-
-	log.Info("kinolist stopped")
-	return nil
 }
 
-// readinessDrainDelay — сколько ждать между переводом /readyz в ошибку и
-// закрытием сервера.
-const readinessDrainDelay = 2 * time.Second
+// infraConfig переводит конфиг kinolist в конфиг инфраструктуры. Переменные
+// окружения kinolist остаются прежними, поэтому деплой менять не нужно.
+func infraConfig(cfg *config.Config) infraapp.Config {
+	ac := infraapp.Config{
+		ServiceName:     serviceName,
+		Version:         version,
+		Environment:     cfg.App.Env,
+		ShutdownTimeout: cfg.App.ShutdownTimeout,
+	}
+
+	ac.Logger.Level = cfg.App.LogLevel
+	ac.Logger.PrettyOutput = !cfg.App.IsProd()
+	ac.Logger.Masking = true
+
+	ac.Metrics = metrics.DefaultConfig() // Prometheus: /metrics на служебном порту
+
+	ac.Tracing = tracing.DefaultConfig()
+	ac.Tracing.Enabled = cfg.Tracing.Enabled
+	ac.Tracing.Exporter = cfg.Tracing.Exporter
+	ac.Tracing.OTLPEndpoint = cfg.Tracing.Endpoint
+	ac.Tracing.OTLPInsecure = cfg.Tracing.Insecure
+	ac.Tracing.SamplingRate = cfg.Tracing.SamplingRate
+
+	// Служебный порт (/metrics, /healthz, /ready) — на METRICS_ADDR, который не
+	// публикуется наружу. Пустое значение выключает его.
+	if host, port, err := net.SplitHostPort(cfg.HTTP.MetricsAddr); err == nil && port != "" {
+		ac.Admin = infraapp.AdminConfig{Host: host, Port: port, Enabled: true}
+	}
+
+	return ac
+}
+
+// botConfig собирает настройки бота инфраструктуры из конфига kinolist.
+func botConfig(cfg *config.Config) tgbot.Config {
+	bc := tgbot.DefaultConfig(cfg.Telegram.BotToken)
+	bc.API.BaseURL = cfg.Telegram.APIURL
+	bc.Mode = cfg.Telegram.Mode
+	bc.PollTimeout = cfg.Telegram.PollTimeout
+	bc.Workers = cfg.Telegram.Workers
+
+	bc.Webhook.URL = cfg.HTTP.PublicURL + cfg.Telegram.WebhookPath
+	bc.Webhook.Secret = cfg.Telegram.WebhookSecret
+	bc.Webhook.Path = cfg.Telegram.WebhookPath
+	// Встроенный webhook-сервер не нужен: обработчик смонтирован на публичный роутер.
+	bc.Webhook.Port = ""
+	// Апдейты, накопившиеся пока сервис лежал, чаще всего уже неактуальны.
+	bc.Webhook.DropPendingUpdates = true
+
+	return bc
+}
 
 func webAppURL(cfg *config.Config) string {
 	if cfg.HTTP.PublicURL == "" {

@@ -19,6 +19,8 @@ func NewCacheRepository(tx *transactions.Manager) *CacheRepository {
 }
 
 func (r *CacheRepository) Get(ctx context.Context, key string) ([]byte, bool, error) {
+	ctx = queryName(ctx, "cache.get")
+
 	const q = `SELECT payload FROM catalog_cache WHERE cache_key = $1 AND expires_at > now()`
 
 	var payload []byte
@@ -33,6 +35,8 @@ func (r *CacheRepository) Get(ctx context.Context, key string) ([]byte, bool, er
 }
 
 func (r *CacheRepository) Set(ctx context.Context, key string, payload []byte, ttl time.Duration) error {
+	ctx = queryName(ctx, "cache.set")
+
 	const q = `
 		INSERT INTO catalog_cache (cache_key, payload, expires_at)
 		VALUES ($1, $2, now() + $3::interval)
@@ -48,6 +52,8 @@ func (r *CacheRepository) Set(ctx context.Context, key string, payload []byte, t
 
 // DeleteExpired вызывается фоном: без уборки таблица растёт бесконечно.
 func (r *CacheRepository) DeleteExpired(ctx context.Context) (int64, error) {
+	ctx = queryName(ctx, "cache.delete_expired")
+
 	tag, err := r.tx.Querier(ctx).Exec(ctx, `DELETE FROM catalog_cache WHERE expires_at <= now()`)
 	if err != nil {
 		return 0, fmt.Errorf("delete expired cache entries: %w", err)

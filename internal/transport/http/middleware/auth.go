@@ -13,8 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/arrowwhi/kinolist/internal/pkg/logger"
 )
 
@@ -51,14 +49,14 @@ func TelegramAuth(botToken string, resolve func(context.Context, Identity) (int6
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			raw := initDataFrom(r)
 			if raw == "" {
-				logger.From(r.Context()).Warn("telegram auth rejected", zap.Error(ErrMissingInitData))
+				logger.Warn(r.Context()).Err(ErrMissingInitData).Msg("telegram auth rejected")
 				writeAuthError(w, ErrMissingInitData)
 				return
 			}
 
 			identity, err := ParseInitData(raw, secretKey, time.Now())
 			if err != nil {
-				logger.From(r.Context()).Warn("telegram auth rejected", zap.Error(err))
+				logger.Warn(r.Context()).Err(err).Msg("telegram auth rejected")
 				writeAuthError(w, err)
 				return
 			}
@@ -67,7 +65,7 @@ func TelegramAuth(botToken string, resolve func(context.Context, Identity) (int6
 			if err != nil {
 				// Подпись верна, упал сбор пользователя — без лога это
 				// неотличимо от подделки, клиент видит тот же 401.
-				logger.From(r.Context()).Error("resolve telegram user failed", zap.Error(err))
+				logger.Error(r.Context()).Err(err).Msg("resolve telegram user failed")
 				writeAuthError(w, err)
 				return
 			}

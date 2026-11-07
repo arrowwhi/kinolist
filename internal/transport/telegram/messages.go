@@ -6,12 +6,14 @@ import (
 	"html"
 	"strings"
 
+	"github.com/arrowwhi/infrastructure/telegram/api"
+
 	"github.com/arrowwhi/kinolist/internal/domain/enrichment"
 	"github.com/arrowwhi/kinolist/internal/domain/movie"
 	"github.com/arrowwhi/kinolist/internal/pkg/errmap"
 )
 
-const parseModeHTML = "HTML"
+const parseModeHTML = api.ParseModeHTML
 
 // maxOverview — Telegram режет подпись к фото на 1024 символах.
 const maxOverview = 600
