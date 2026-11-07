@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/arrowwhi/infrastructure/telegram/api"
+	tg "github.com/arrowwhi/infrastructure/telegram"
 
 	"github.com/arrowwhi/kinolist/internal/domain/enrichment"
 	"github.com/arrowwhi/kinolist/internal/domain/movie"
@@ -15,10 +15,10 @@ import (
 // Notifier доставляет результат фоновой задачи в чат. Воркер знает только
 // интерфейс из домена и ничего не знает о Telegram.
 type Notifier struct {
-	api *api.Client
+	api *tg.Client
 }
 
-func NewNotifier(client *api.Client) *Notifier {
+func NewNotifier(client *tg.Client) *Notifier {
 	return &Notifier{api: client}
 }
 
@@ -48,9 +48,9 @@ func (n *Notifier) NotifyOutcome(ctx context.Context, out enrichment.Outcome) er
 
 // sendCandidate пробует отправить постер картинкой и молча откатывается на
 // текст: недоступная обложка не повод терять всё сообщение.
-func (n *Notifier) sendCandidate(ctx context.Context, chatID int64, c movie.Candidate, caption string, kb *api.InlineKeyboardMarkup) error {
+func (n *Notifier) sendCandidate(ctx context.Context, chatID int64, c movie.Candidate, caption string, kb *tg.InlineKeyboardMarkup) error {
 	if poster := posterURL(c.PosterPath); poster != "" {
-		_, err := n.api.SendPhoto(ctx, api.SendPhotoRequest{
+		_, err := n.api.SendPhoto(ctx, tg.SendPhotoRequest{
 			ChatID: chatID, Photo: poster, Caption: caption,
 			ParseMode: parseModeHTML, ReplyMarkup: markup(kb),
 		})
@@ -65,10 +65,10 @@ func (n *Notifier) sendCandidate(ctx context.Context, chatID int64, c movie.Cand
 	return n.sendText(ctx, chatID, caption, kb)
 }
 
-func (n *Notifier) sendText(ctx context.Context, chatID int64, text string, kb *api.InlineKeyboardMarkup) error {
-	_, err := n.api.SendMessage(ctx, api.SendMessageRequest{
+func (n *Notifier) sendText(ctx context.Context, chatID int64, text string, kb *tg.InlineKeyboardMarkup) error {
+	_, err := n.api.SendMessage(ctx, tg.SendMessageRequest{
 		ChatID: chatID, Text: text, ParseMode: parseModeHTML,
-		ReplyMarkup: markup(kb), LinkPreviewOptions: &api.LinkPreviewOptions{IsDisabled: true},
+		ReplyMarkup: markup(kb), LinkPreviewOptions: &tg.LinkPreviewOptions{IsDisabled: true},
 	})
 	return err
 }
@@ -76,7 +76,7 @@ func (n *Notifier) sendText(ctx context.Context, chatID int64, text string, kb *
 // isPhotoUnavailable — Telegram не смог забрать постер по ссылке; сообщение нужно
 // повторить текстом.
 func isPhotoUnavailable(err error) bool {
-	var apiErr *api.Error
+	var apiErr *tg.APIError
 	if !errors.As(err, &apiErr) {
 		return false
 	}
@@ -92,7 +92,7 @@ func isPhotoUnavailable(err error) bool {
 
 // markup превращает nil-клавиатуру в nil-интерфейс: иначе в JSON ушло бы
 // "reply_markup": null.
-func markup(kb *api.InlineKeyboardMarkup) api.ReplyMarkup {
+func markup(kb *tg.InlineKeyboardMarkup) tg.ReplyMarkup {
 	if kb == nil {
 		return nil
 	}

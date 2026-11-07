@@ -160,7 +160,7 @@ Caddy сам получит и будет продлевать сертифик�
 
 Логи, метрики, трейсы, health-проверки и порядок остановки берутся из
 [github.com/arrowwhi/infrastructure](https://github.com/arrowwhi/infrastructure)
-(`telegram/app`):
+(пакет `telegram`):
 
 - **Логи** — JSON в `prod`, цветной текст локально. В записях запроса или задачи —
   `request_id`/`job_id`/`telegram_id`, при включённом трейсинге — `trace_id`/`span_id`.

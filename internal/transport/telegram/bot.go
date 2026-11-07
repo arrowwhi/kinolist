@@ -1,5 +1,5 @@
 // Package telegram — обработчики бота kinolist поверх скелета инфраструктуры
-// (github.com/arrowwhi/infrastructure/telegram/bot): получение обновлений
+// (github.com/arrowwhi/infrastructure/telegram): получение обновлений
 // (polling или webhook), порядок обработки внутри чата, лимиты Bot API, логи,
 // метрики и трейсы живут там, здесь — только сценарии kinolist.
 package telegram
@@ -9,8 +9,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/arrowwhi/infrastructure/telegram/api"
-	tgbot "github.com/arrowwhi/infrastructure/telegram/bot"
+	tg "github.com/arrowwhi/infrastructure/telegram"
 
 	"github.com/arrowwhi/kinolist/internal/domain/enrichment"
 	"github.com/arrowwhi/kinolist/internal/domain/movie"
@@ -47,7 +46,7 @@ type userKey struct{}
 
 // Register вешает обработчики kinolist на бота инфраструктуры. Команды с
 // описанием попадают в меню бота при старте.
-func (b *Bot) Register(r *tgbot.Bot) {
+func (b *Bot) Register(r *tg.Bot) {
 	r.Use(b.ignoreBots, b.resolveUserMiddleware)
 
 	r.Command("start", "Начать", b.start)
@@ -65,7 +64,7 @@ func (b *Bot) Register(r *tgbot.Bot) {
 
 // SetupMenuButton ставит кнопку меню чата, открывающую Mini App. Ошибка не
 // фатальна: бот работает и без неё.
-func (b *Bot) SetupMenuButton(ctx context.Context, client *api.Client) error {
+func (b *Bot) SetupMenuButton(ctx context.Context, client *tg.Client) error {
 	if b.webAppURL == "" {
 		return nil
 	}
@@ -74,14 +73,14 @@ func (b *Bot) SetupMenuButton(ctx context.Context, client *api.Client) error {
 		"menu_button": map[string]any{
 			"type":    "web_app",
 			"text":    "Коллекция",
-			"web_app": api.WebAppInfo{URL: b.webAppURL},
+			"web_app": tg.WebAppInfo{URL: b.webAppURL},
 		},
 	}, nil)
 }
 
 // ignoreBots отбрасывает сообщения от других ботов.
-func (b *Bot) ignoreBots(next tgbot.HandlerFunc) tgbot.HandlerFunc {
-	return func(c *tgbot.Context) error {
+func (b *Bot) ignoreBots(next tg.HandlerFunc) tg.HandlerFunc {
+	return func(c *tg.Context) error {
 		if u := c.User(); u == nil || u.IsBot {
 			return nil
 		}
@@ -91,8 +90,8 @@ func (b *Bot) ignoreBots(next tgbot.HandlerFunc) tgbot.HandlerFunc {
 }
 
 // resolveUserMiddleware заводит или находит пользователя kinolist по Telegram-личности.
-func (b *Bot) resolveUserMiddleware(next tgbot.HandlerFunc) tgbot.HandlerFunc {
-	return func(c *tgbot.Context) error {
+func (b *Bot) resolveUserMiddleware(next tg.HandlerFunc) tg.HandlerFunc {
+	return func(c *tg.Context) error {
 		from := c.User()
 
 		c.Context = logger.With(c.Context, "telegram_id", from.ID)
@@ -121,28 +120,28 @@ func (b *Bot) resolveUserMiddleware(next tgbot.HandlerFunc) tgbot.HandlerFunc {
 	}
 }
 
-func currentUser(c *tgbot.Context) user.User {
+func currentUser(c *tg.Context) user.User {
 	u, _ := c.Value(userKey{}).(user.User)
 	return u
 }
 
-func (b *Bot) start(c *tgbot.Context) error {
+func (b *Bot) start(c *tg.Context) error {
 	b.send(c, startText(currentUser(c).FirstName), openAppKeyboard(b.webAppURL))
 	return nil
 }
 
-func (b *Bot) help(c *tgbot.Context) error {
+func (b *Bot) help(c *tg.Context) error {
 	b.send(c, helpText, nil)
 	return nil
 }
 
-func (b *Bot) collectionCmd(c *tgbot.Context) error {
+func (b *Bot) collectionCmd(c *tg.Context) error {
 	b.send(c, "Ваша коллекция:", openAppKeyboard(b.webAppURL))
 	return nil
 }
 
 // search ставит название в очередь обогащения; ответ с кандидатами пришлёт воркер.
-func (b *Bot) search(c *tgbot.Context) error {
+func (b *Bot) search(c *tg.Context) error {
 	text := strings.TrimSpace(c.Text())
 	if text == "" {
 		b.reply(c, "Пришлите название фильма или сериала.")
@@ -160,7 +159,7 @@ func (b *Bot) search(c *tgbot.Context) error {
 }
 
 // fallback — неизвестные команды, сообщения без текста и устаревшие кнопки.
-func (b *Bot) fallback(c *tgbot.Context) error {
+func (b *Bot) fallback(c *tg.Context) error {
 	switch {
 	case c.Callback() != nil:
 		return c.Answer("Кнопка устарела", false)
@@ -175,7 +174,7 @@ func (b *Bot) fallback(c *tgbot.Context) error {
 
 // parseButton разбирает data кнопки и снимает клавиатуру: повторное нажатие уже
 // ничего не изменит.
-func (b *Bot) parseButton(c *tgbot.Context) (callback, bool) {
+func (b *Bot) parseButton(c *tg.Context) (callback, bool) {
 	cb, err := parseCallback(c.CallbackData())
 	if err != nil {
 		logger.Warn(c).Err(err).Msg("malformed callback data")
@@ -185,7 +184,7 @@ func (b *Bot) parseButton(c *tgbot.Context) (callback, bool) {
 	}
 
 	if m := c.Message(); m != nil {
-		if err := c.API().EditMessageReplyMarkup(c, m.Chat.ID, m.MessageID, nil); err != nil && !api.IsMessageNotModified(err) {
+		if err := c.API().EditMessageReplyMarkup(c, m.Chat.ID, m.MessageID, nil); err != nil && !tg.IsMessageNotModified(err) {
 			logger.Debug(c).Err(err).Msg("clear keyboard failed")
 		}
 	}
@@ -193,7 +192,7 @@ func (b *Bot) parseButton(c *tgbot.Context) (callback, bool) {
 	return cb, true
 }
 
-func (b *Bot) confirmCallback(c *tgbot.Context) error {
+func (b *Bot) confirmCallback(c *tg.Context) error {
 	cb, ok := b.parseButton(c)
 	if !ok {
 		return nil
@@ -215,7 +214,7 @@ func (b *Bot) confirmCallback(c *tgbot.Context) error {
 	return c.Answer("Добавлено", false)
 }
 
-func (b *Bot) rejectCallback(c *tgbot.Context) error {
+func (b *Bot) rejectCallback(c *tg.Context) error {
 	cb, ok := b.parseButton(c)
 	if !ok {
 		return nil
@@ -230,7 +229,7 @@ func (b *Bot) rejectCallback(c *tgbot.Context) error {
 	return c.Answer("Отменено", false)
 }
 
-func (b *Bot) otherCallback(c *tgbot.Context) error {
+func (b *Bot) otherCallback(c *tg.Context) error {
 	cb, ok := b.parseButton(c)
 	if !ok {
 		return nil
@@ -245,20 +244,20 @@ func (b *Bot) otherCallback(c *tgbot.Context) error {
 	return c.Answer("Хорошо", false)
 }
 
-func (b *Bot) reply(c *tgbot.Context, text string) {
+func (b *Bot) reply(c *tg.Context, text string) {
 	b.send(c, text, nil)
 }
 
 // send отправляет HTML-сообщение без превью ссылок. Ошибка отправки только
 // логируется: пользователю её всё равно не показать.
-func (b *Bot) send(c *tgbot.Context, text string, kb *api.InlineKeyboardMarkup) {
+func (b *Bot) send(c *tg.Context, text string, kb *tg.InlineKeyboardMarkup) {
 	if c.ChatID() == 0 {
 		return
 	}
 
-	opts := []tgbot.SendOption{tgbot.WithParseMode(parseModeHTML), tgbot.WithoutPreview()}
+	opts := []tg.SendOption{tg.WithParseMode(parseModeHTML), tg.WithoutPreview()}
 	if kb != nil {
-		opts = append(opts, tgbot.WithKeyboard(kb))
+		opts = append(opts, tg.WithKeyboard(kb))
 	}
 
 	if _, err := c.Reply(text, opts...); err != nil {
