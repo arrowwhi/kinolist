@@ -4,6 +4,22 @@
 .add-form > .field-label {
   margin-top: 0;
 }
+.add-form__label {
+  font-size: 15px;
+  font-weight: 600;
+}
+.add-form__row {
+  display: flex;
+  gap: 8px;
+}
+.add-form__row > .field-label {
+  flex: 1;
+}
+.add-form__paste {
+  flex: none;
+  width: auto;
+  padding: 0 16px;
+}
 .search-progress {
   display: flex;
   flex-direction: column;
