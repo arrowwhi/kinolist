@@ -34,6 +34,15 @@ export function useTelegramSetup() {
       app.ready()
       app.expand()
     })
+    // На телефоне приложение занимает весь экран, как в макетах: сверху
+    // остаются только статус-бар и плавающие кнопки Telegram. На десктопе
+    // полноэкранный режим растянул бы окно на весь монитор — там не нужен.
+    call('8.0', (app) => {
+      if (app.platform === 'ios' || app.platform === 'android')
+        app.requestFullscreen?.()
+    })
+    // Без шапки свайп вниз по списку закрывал бы приложение.
+    call('7.7', (app) => app.disableVerticalSwipes?.())
     paintTelegram(parseTheme(document.documentElement.dataset.theme))
   }, [])
 }
