@@ -9,8 +9,9 @@
 .app-shell--telegram {
   padding-top: max(12px, env(safe-area-inset-top));
 }
-.app-shell--tabs {
-  padding-bottom: calc(172px + env(safe-area-inset-bottom));
+.app-shell--pinned {
+  /* 52 — высота панели, 24 — отступ от края, 16 — воздух над ней. */
+  padding-bottom: calc(92px + env(safe-area-inset-bottom));
 }
 .telegram-header {
   display: grid;
@@ -47,6 +48,8 @@
 .page-heading > p {
   font-size: 13px;
 }
+/* Нижняя панель закреплена у края экрана: вкладки и круглая «+» в одну
+   строку. Градиент под ней отделяет панель от прокручиваемого списка. */
 .bottom-bar {
   position: fixed;
   z-index: 10;
@@ -54,38 +57,76 @@
   left: 50%;
   transform: translateX(-50%);
   width: min(100%, 438px);
-  padding: 16px var(--space-page) max(16px, env(safe-area-inset-bottom));
-  background: var(--color-bg);
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.bottom-nav {
-  min-height: 64px;
-  padding: 8px 12px;
-  display: flex;
-  align-items: stretch;
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-}
-.bottom-nav > a {
-  flex: 1;
-  min-width: 0;
+  padding: 24px var(--space-page) max(24px, env(safe-area-inset-bottom));
   display: flex;
   align-items: center;
+  gap: 8px;
+  background: linear-gradient(to top, var(--color-bg) 55%, transparent);
+  pointer-events: none;
+}
+.bottom-bar > * {
+  pointer-events: auto;
+}
+.bottom-bar--center {
   justify-content: center;
+}
+.bottom-nav {
+  flex: 1;
+  min-width: 0;
+  height: 52px;
+  padding: 4px;
+  display: flex;
+  justify-content: space-between;
+  gap: 2px;
+  border-radius: 26px;
+  background: var(--color-surface);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 40%);
+}
+.bottom-nav > a {
+  min-width: 0;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  border-radius: 22px;
   color: var(--color-muted);
   text-decoration: none;
-  font-size: 12px;
-  font-weight: 400;
-  text-align: center;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
 }
 .bottom-nav > a[aria-current='page'] {
+  background: var(--color-raised);
   color: var(--color-accent);
   font-weight: 600;
 }
 [data-theme='light'] .bottom-nav > a[aria-current='page'] {
   color: var(--color-text);
-  text-decoration: underline;
-  text-underline-offset: 5px;
+}
+.bottom-add {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 40%);
+}
+.bottom-add:active {
+  opacity: 0.8;
+}
+/* На узких телефонах (iPhone SE и уже) три вкладки и «+» иначе не
+   помещаются: «Просмотрено» обрезается. */
+@media (max-width: 359px) {
+  .bottom-bar {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .bottom-nav > a {
+    padding: 0 6px;
+    font-size: 12px;
+  }
 }

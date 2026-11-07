@@ -10,7 +10,7 @@ export function Shell({
   subtitle,
   children,
   onBack,
-  actions,
+  floating,
   tab,
   navigate,
 }: {
@@ -18,7 +18,8 @@ export function Shell({
   subtitle?: ReactNode
   children: ReactNode
   onBack?: () => void
-  actions?: ReactNode
+  // Действие, закреплённое у нижнего края на экранах без вкладок.
+  floating?: ReactNode
   tab?: 'want_to_watch' | 'watched' | 'genres'
   navigate: Navigate
 }) {
@@ -28,7 +29,11 @@ export function Shell({
   const telegram = insideTelegram()
   return (
     <div
-      className={`app-shell ${tab ? 'app-shell--tabs' : ''} ${telegram ? 'app-shell--telegram' : ''}`}
+      className={[
+        'app-shell',
+        tab || floating ? 'app-shell--pinned' : '',
+        telegram ? 'app-shell--telegram' : '',
+      ].join(' ')}
     >
       {!telegram && (
         <header className="telegram-header">
@@ -50,9 +55,11 @@ export function Shell({
         </div>
         {children}
       </main>
+      {floating && !tab && (
+        <footer className="bottom-bar bottom-bar--center">{floating}</footer>
+      )}
       {tab && (
         <footer className="bottom-bar">
-          {actions}
           <nav aria-label="Основная навигация" className="bottom-nav">
             {(
               [
@@ -75,6 +82,24 @@ export function Shell({
               </a>
             ))}
           </nav>
+          <button
+            type="button"
+            className="bottom-add"
+            aria-label="Добавить фильм или сериал"
+            onClick={() => {
+              haptic('light')
+              navigate('/add')
+            }}
+          >
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+              <path
+                d="M12 4v16M4 12h16"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
         </footer>
       )}
     </div>
