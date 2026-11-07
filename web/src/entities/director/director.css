@@ -8,6 +8,7 @@
   padding: 16px;
   border-radius: var(--radius-lg);
   background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-edge);
   text-align: left;
   font-size: 12px;
   line-height: 1.45;
@@ -27,14 +28,10 @@
 }
 .director-credits__names button,
 .director-credits__toggle {
-  color: var(--color-accent);
+  color: var(--color-accent-text);
   padding: 4px 0;
   text-align: left;
   min-height: 36px;
-}
-[data-theme='light'] .director-credits__names button,
-[data-theme='light'] .director-credits__toggle {
-  color: var(--color-on-accent);
 }
 .director-credits__toggle {
   align-self: flex-start;

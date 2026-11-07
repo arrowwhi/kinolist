@@ -23,6 +23,7 @@ export function GenresPage({
       navigate={navigate}
       tab="genres"
       onBack={back}
+      themeToggle
     >
       {loading ? (
         <SkeletonList />

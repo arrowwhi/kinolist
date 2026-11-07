@@ -128,6 +128,8 @@ export function CollectionPage({
       }
       navigate={navigate}
       onBack={back}
+      // На вкладках «На потом» и «Просмотрено»; не в списках жанра и режиссёра.
+      themeToggle={!director && !genre}
       tab={
         director
           ? undefined

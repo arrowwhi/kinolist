@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { ThemeToggle } from '../../features/theme/ThemeToggle'
 import type { Navigate } from '../../shared/lib/navigation'
 import {
   haptic,
@@ -13,6 +14,7 @@ export function Shell({
   floating,
   tab,
   navigate,
+  themeToggle,
 }: {
   title: string
   subtitle?: ReactNode
@@ -22,6 +24,8 @@ export function Shell({
   floating?: ReactNode
   tab?: 'want_to_watch' | 'watched' | 'genres'
   navigate: Navigate
+  // Переключатель темы — только на основных экранах, не на вложенных.
+  themeToggle?: boolean
 }) {
   useTelegramBackButton(onBack)
   // В Telegram шапку с «назад» и «закрыть» рисует сам клиент — своя
@@ -50,7 +54,14 @@ export function Shell({
       )}
       <main className="page-content">
         <div className="page-heading">
-          <h1>{title}</h1>
+          {themeToggle ? (
+            <div className="page-heading__title">
+              <h1>{title}</h1>
+              <ThemeToggle />
+            </div>
+          ) : (
+            <h1>{title}</h1>
+          )}
           {subtitle && <p className="muted">{subtitle}</p>}
         </div>
         {children}

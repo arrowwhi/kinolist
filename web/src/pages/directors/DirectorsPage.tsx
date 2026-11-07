@@ -43,6 +43,7 @@ export function DirectorsPage({
       subtitle="Авторы историй в твоей коллекции."
       navigate={navigate}
       onBack={back}
+      themeToggle
     >
       <div className="chips" role="group" aria-label="Тип работ">
         {(
