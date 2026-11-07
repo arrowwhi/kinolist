@@ -1,6 +1,10 @@
 import type { ReactNode } from 'react'
 import type { Navigate } from '../../shared/lib/navigation'
-import { webApp, haptic } from '../../shared/lib/telegram'
+import {
+  haptic,
+  insideTelegram,
+  useTelegramBackButton,
+} from '../../shared/lib/telegram'
 export function Shell({
   title,
   subtitle,
@@ -18,19 +22,27 @@ export function Shell({
   tab?: 'want_to_watch' | 'watched' | 'genres'
   navigate: Navigate
 }) {
+  useTelegramBackButton(onBack)
+  // В Telegram шапку с «назад» и «закрыть» рисует сам клиент — своя
+  // нужна только в обычном браузере, где нативной стрелки нет.
+  const telegram = insideTelegram()
   return (
-    <div className={`app-shell ${tab ? 'app-shell--tabs' : ''}`}>
-      <header className="telegram-header">
-        <button
-          type="button"
-          onClick={onBack ?? (() => webApp()?.close())}
-          disabled={!onBack && !webApp()}
-        >
-          {onBack ? '← Назад' : 'Закрыть'}
-        </button>
-        <span>Кинолист</span>
-        <span aria-hidden="true" />
-      </header>
+    <div
+      className={`app-shell ${tab ? 'app-shell--tabs' : ''} ${telegram ? 'app-shell--telegram' : ''}`}
+    >
+      {!telegram && (
+        <header className="telegram-header">
+          {onBack ? (
+            <button type="button" onClick={onBack}>
+              ← Назад
+            </button>
+          ) : (
+            <span aria-hidden="true" />
+          )}
+          <span>Кинолист</span>
+          <span aria-hidden="true" />
+        </header>
+      )}
       <main className="page-content">
         <div className="page-heading">
           <h1>{title}</h1>

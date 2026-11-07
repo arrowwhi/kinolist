@@ -18,17 +18,20 @@ export function formatRuntime(minutes?: number) {
     .filter(Boolean)
     .join(' ')
 }
-export function movieCount(count: number) {
-  const mod = count % 100
-  const word =
-    mod >= 11 && mod <= 14
-      ? 'фильмов'
-      : count % 10 === 1
-        ? 'фильм'
-        : count % 10 >= 2 && count % 10 <= 4
-          ? 'фильма'
-          : 'фильмов'
-  return `${count} ${word}`
+// Русское склонение по числу: forms — для 1, 2 и 5 («фильм», «фильма»,
+// «фильмов»). Единственное место с этим правилом.
+export function plural(
+  count: number,
+  forms: readonly [string, string, string],
+) {
+  const last = Math.abs(count) % 100
+  return last >= 11 && last <= 14
+    ? forms[2]
+    : last % 10 === 1
+      ? forms[0]
+      : last % 10 >= 2 && last % 10 <= 4
+        ? forms[1]
+        : forms[2]
 }
 export function safeExternalUrl(value?: string) {
   if (!value) return null

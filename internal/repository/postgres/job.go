@@ -77,6 +77,9 @@ func (r *JobRepository) GetForUser(ctx context.Context, userID, id int64) (enric
 	return out, nil
 }
 
+// Update не трогает завершённые и отменённые задачи: иначе воркер, дописав
+// результат после отмены, воскресил бы задачу. Такой случай возвращает
+// ErrJobNotFound — для вызывающего задачи больше нет.
 func (r *JobRepository) Update(ctx context.Context, j enrichment.Job) error {
 	candidates, err := marshalCandidates(j.Candidates)
 	if err != nil {
@@ -95,7 +98,7 @@ func (r *JobRepository) Update(ctx context.Context, j enrichment.Job) error {
 		    last_error  = $9,
 		    run_after   = $10,
 		    updated_at  = now()
-		WHERE id = $1`
+		WHERE id = $1 AND status NOT IN ('done', 'cancelled')`
 
 	tag, err := r.tx.Querier(ctx).Exec(ctx, q,
 		j.ID, j.Status, j.SourceURL, j.RawTitle, j.QueryTitle, j.QueryYear,

@@ -42,12 +42,21 @@ func TestClassifyInput(t *testing.T) {
 			wantKind: enrichment.KindReel, wantValue: "https://instagram.com/reel/Abc123",
 		},
 		{
+			name: "username-prefixed reel url", in: "https://www.instagram.com/someuser/reel/C1a2B3c4D5/",
+			wantKind: enrichment.KindReel, wantValue: "https://www.instagram.com/someuser/reel/C1a2B3c4D5/",
+		},
+		{
+			name: "share link", in: "https://www.instagram.com/share/reel/BAxyz123/?igsh=abc",
+			wantKind: enrichment.KindReel, wantValue: "https://www.instagram.com/share/reel/BAxyz123/",
+		},
+		{
 			name: "movie title containing a dot is not a url", in: "8 миля",
 			wantKind: enrichment.KindTitle, wantValue: "8 миля",
 		},
 		{name: "empty input", in: "   ", wantErr: enrichment.ErrEmptyInput},
 		{name: "foreign host", in: "https://tiktok.com/@user/video/123", wantErr: enrichment.ErrInvalidReelURL},
 		{name: "instagram profile is not a reel", in: "https://instagram.com/someuser", wantErr: enrichment.ErrInvalidReelURL},
+		{name: "reel segment without id", in: "https://instagram.com/someuser/reel/", wantErr: enrichment.ErrInvalidReelURL},
 		{name: "instagram root", in: "https://instagram.com/", wantErr: enrichment.ErrInvalidReelURL},
 	}
 

@@ -6,6 +6,9 @@
   padding: max(24px, env(safe-area-inset-top)) var(--space-page)
     max(32px, env(safe-area-inset-bottom));
 }
+.app-shell--telegram {
+  padding-top: max(12px, env(safe-area-inset-top));
+}
 .app-shell--tabs {
   padding-bottom: calc(172px + env(safe-area-inset-bottom));
 }

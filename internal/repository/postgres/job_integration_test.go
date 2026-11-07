@@ -58,6 +58,16 @@ func TestJobLifecycle(t *testing.T) {
 	if _, err := repo.GetForUser(ctx, stranger.ID, created.ID); !errors.Is(err, enrichment.ErrJobNotFound) {
 		t.Fatalf("err = %v, want ErrJobNotFound for another user's job", err)
 	}
+
+	// Отменённую задачу воркер уже не перезапишет.
+	created.Status = enrichment.StatusCancelled
+	if err := repo.Update(ctx, created); err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+	created.Status = enrichment.StatusConfirming
+	if err := repo.Update(ctx, created); !errors.Is(err, enrichment.ErrJobNotFound) {
+		t.Fatalf("err = %v, want ErrJobNotFound for a cancelled job", err)
+	}
 }
 
 func TestClaimSkipsFutureAndNonPendingJobs(t *testing.T) {

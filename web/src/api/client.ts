@@ -24,14 +24,25 @@ export class RequestError extends Error {
   }
 }
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`/api/v1${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Telegram-Init-Data': window.Telegram?.WebApp?.initData ?? '',
-      ...init.headers,
-    },
-  })
+  let response: Response
+  try {
+    response = await fetch(`/api/v1${path}`, {
+      ...init,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Telegram-Init-Data': window.Telegram?.WebApp?.initData ?? '',
+        ...init.headers,
+      },
+    })
+  } catch (err) {
+    // Отмену запроса вызывающий распознаёт сам, а сетевой сбой браузер
+    // описывает по-английски («Failed to fetch») — подменяем понятным текстом.
+    if (init.signal?.aborted) throw err
+    throw new RequestError(
+      'network',
+      'Нет связи с сервером. Проверь интернет и попробуй ещё раз.',
+    )
+  }
   if (response.status === 204) return undefined as T
   const body = await response.json().catch(() => null)
   if (!response.ok)

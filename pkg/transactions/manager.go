@@ -34,10 +34,10 @@ func NewManager(pool *pgxpool.Pool) *Manager {
 // BeginTransaction открывает транзакцию и кладёт её в контекст.
 // Возвращённый контекст обязан быть передан в FinishTransaction.
 func (m *Manager) BeginTransaction(ctx context.Context) (context.Context, error) {
-	if _, ok := txFrom(ctx); ok {
-		// Вложенный вызов переиспользует внешнюю транзакцию: его
-		// FinishTransaction станет no-op, коммитит владелец.
-		return ctx, nil
+	if h, ok := txFrom(ctx); ok {
+		// Вложенный вызов переиспользует внешнюю транзакцию, но без права
+		// владельца: его FinishTransaction станет no-op, коммитит внешний.
+		return context.WithValue(ctx, ctxKey{}, &holder{tx: h.tx, owner: false}), nil
 	}
 
 	tx, err := m.pool.Begin(ctx)

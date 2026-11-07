@@ -35,6 +35,11 @@ export function AddMoviePage({
     navigate(`/movie/${id}`, true)
   })
   const [rating, setRating] = useState(false)
+  // Дубль обнаружился уже на форме оценки — возвращаемся к карточке,
+  // где есть кнопка «Открыть в коллекции».
+  useEffect(() => {
+    if (flow.existingId) setRating(false)
+  }, [flow.existingId])
   const candidates =
     flow.job?.status === 'confirming' ? flow.job.candidates : []
   useEffect(() => {

@@ -132,6 +132,11 @@ func (uc *UseCase) Enqueue(ctx context.Context, userID, chatID int64, input stri
 		if !uc.fetcher.Enabled() {
 			return enrichment.Job{}, enrichment.ErrFetcherDisabled
 		}
+		// Без экстрактора рилс всё равно упадёт в воркере — отказываем сразу,
+		// пока пользователь ещё ждёт ответа.
+		if !uc.extractor.Enabled() {
+			return enrichment.Job{}, enrichment.ErrExtractorDisabled
+		}
 		job.SourceURL = value
 	case enrichment.KindTitle:
 		job.RawTitle = value
@@ -171,6 +176,10 @@ func (uc *UseCase) Process(ctx context.Context, job enrichment.Job) (enrichment.
 	job.LastError = ""
 
 	if err := uc.jobs.Update(ctx, job); err != nil {
+		if errors.Is(err, enrichment.ErrJobNotFound) {
+			// Пользователь отменил задачу, пока воркер искал: молча выходим.
+			return enrichment.Outcome{}, nil
+		}
 		return enrichment.Outcome{}, fmt.Errorf("save confirming job: %w", err)
 	}
 
@@ -250,6 +259,12 @@ func (uc *UseCase) search(ctx context.Context, title string, year int16) ([]movi
 		}
 		// Основной источник отработал и честно вернул пусто — это не ошибка.
 		return nil, nil
+	}
+
+	// Пустой запасной ответ при упавшем основном не значит «не нашлось»:
+	// возвращаем сбой, чтобы задача ушла на повтор.
+	if len(fallbackCandidates) == 0 && primaryErr != nil {
+		return nil, fmt.Errorf("search %s: %w", uc.primary.Provider(), primaryErr)
 	}
 
 	return fallbackCandidates, nil
@@ -372,6 +387,14 @@ func (uc *UseCase) Reject(ctx context.Context, userID, jobID int64) error {
 		return fmt.Errorf("get job: %w", err)
 	}
 
+	switch job.Status {
+	case enrichment.StatusCancelled:
+		// Повторное нажатие устаревшей кнопки — задача уже отменена.
+		return nil
+	case enrichment.StatusDone, enrichment.StatusFailed:
+		return enrichment.ErrJobNotConfirmable
+	}
+
 	return uc.closeJob(ctx, job, enrichment.StatusCancelled)
 }
 
@@ -404,6 +427,9 @@ func (uc *UseCase) fail(ctx context.Context, job enrichment.Job, cause error) (e
 		job.Status = enrichment.StatusPending
 		job.RunAfter = time.Now().Add(uc.retryDelay * time.Duration(job.Attempts))
 		if err := uc.jobs.Update(ctx, job); err != nil {
+			if errors.Is(err, enrichment.ErrJobNotFound) {
+				return enrichment.Outcome{}, nil
+			}
 			return enrichment.Outcome{}, fmt.Errorf("reschedule job: %w", err)
 		}
 		// Пользователя не тревожим: попытка ещё будет.
@@ -412,6 +438,10 @@ func (uc *UseCase) fail(ctx context.Context, job enrichment.Job, cause error) (e
 
 	job.Status = enrichment.StatusFailed
 	if err := uc.jobs.Update(ctx, job); err != nil {
+		if errors.Is(err, enrichment.ErrJobNotFound) {
+			// Задачу уже отменили — сообщать о неудаче некому.
+			return enrichment.Outcome{}, nil
+		}
 		return enrichment.Outcome{}, fmt.Errorf("fail job: %w", err)
 	}
 	if err := uc.jobs.ClearSession(ctx, job.UserID); err != nil {

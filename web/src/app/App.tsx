@@ -20,7 +20,7 @@ import { NotePage } from '../pages/movie/NotePage'
 import { RatePage } from '../pages/movie/RatePage'
 import { AddMoviePage } from '../pages/add-movie/AddMoviePage'
 import { useRecentCandidates } from '../features/add-movie/useRecentCandidates'
-import { defaultFilters } from '../features/collection/model'
+import { defaultFilters, directorFilters } from '../features/collection/model'
 export function App() {
   const { location, navigate, back } = useNavigation()
   const history = useRecentCandidates()
@@ -34,14 +34,8 @@ export function App() {
   >({})
   const path = location.split('?')[0]
   const params = new URLSearchParams(location.split('?')[1])
-  const rootSection = [
-    '/collection/want_to_watch',
-    '/collection/watched',
-    '/genres',
-    '/directors',
-  ].includes(path)
   const goHome = useCallback(() => navigate(home, true), [navigate])
-  useTelegramSetup(rootSection ? goHome : back, path !== home)
+  useTelegramSetup()
   const catalog = useResource((signal) => api.genres(signal), 'genres')
   const changed = useCallback((message: string) => {
     setRevision((value) => value + 1)
@@ -106,7 +100,7 @@ export function App() {
         genres={catalog.data?.items ?? []}
         preferences={
           preferences[key] ?? {
-            filters: { ...defaultFilters(status), groupBy: 'none' },
+            filters: directorFilters(status),
             search: '',
           }
         }
@@ -129,15 +123,10 @@ export function App() {
         : returnParams.get('status') === 'all'
           ? 'all'
           : 'want_to_watch'
-    const current = preferences[returnTo] ?? {
-      filters: {
-        ...defaultFilters(status),
-        ...(returnPath.startsWith('/directors/')
-          ? { groupBy: 'none' as const }
-          : {}),
-      },
-      search: '',
-    }
+    const defaults = returnPath.startsWith('/directors/')
+      ? directorFilters(status)
+      : defaultFilters(status)
+    const current = preferences[returnTo] ?? { filters: defaults, search: '' }
     const fixedGenre = catalog.data?.items.find(
       (g) => returnPath === `/genres/${g.id}`,
     )
@@ -154,6 +143,7 @@ export function App() {
         key={returnTo}
         genres={catalog.data?.items ?? []}
         value={current.filters}
+        defaults={defaults}
         status={status}
         fixedGenre={fixedGenre}
         fixedDirectorId={

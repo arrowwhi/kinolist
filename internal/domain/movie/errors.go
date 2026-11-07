@@ -12,6 +12,7 @@ var (
 	ErrNoCandidates          = errors.New("no matching movies found")
 	ErrInvalidStatus         = errors.New("invalid movie status")
 	ErrInvalidRating         = errors.New("user rating must be between 1 and 10")
+	ErrEmptyUpdate           = errors.New("update has nothing to change")
 	ErrEmptyQuery            = errors.New("search query is empty")
 	ErrProviderUnavailable   = errors.New("movie catalog provider unavailable")
 )
