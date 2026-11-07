@@ -30,6 +30,9 @@ interface TelegramWebApp {
   colorScheme: 'light' | 'dark'
   themeParams: TelegramThemeParams
   isExpanded: boolean
+  platform?: string
+  requestFullscreen?(): void
+  disableVerticalSwipes?(): void
   ready(): void
   expand(): void
   close(): void
