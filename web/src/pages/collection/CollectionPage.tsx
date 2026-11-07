@@ -64,8 +64,8 @@ export function CollectionPage({
   )
   const { page, summary, loading, error } = collection
   const groups = useMemo(
-    () => groupMovies(page?.items ?? [], filters.groupBy, status),
-    [page, filters.groupBy, status],
+    () => groupMovies(page?.items ?? [], filters.groupBy, status, filters.sort),
+    [page, filters.groupBy, status, filters.sort],
   )
   const watched = status === 'watched'
   const scope = director
@@ -312,7 +312,7 @@ export function CollectionPage({
       {error && page && (
         <ErrorState message={error} onRetry={collection.loadMore} />
       )}
-      {page && page.items.length < page.total && (
+      {collection.hasMore && (
         <Button
           variant="secondary"
           busy={collection.loadingMore}

@@ -4,11 +4,8 @@ import {
   defaultFilters,
   groupMovies,
 } from '../src/features/collection/model.ts'
-import {
-  formatRuntime,
-  movieCount,
-  safeExternalUrl,
-} from '../src/shared/lib/format.ts'
+import { contentCount } from '../src/entities/movie/metadata.ts'
+import { formatRuntime, safeExternalUrl } from '../src/shared/lib/format.ts'
 import type { UserMovie } from '../src/api/types.ts'
 const item = (id: number, added: string, watched?: string): UserMovie => ({
   id,
@@ -61,19 +58,29 @@ test('unrated watched entries with missing date do not produce an invalid headin
     'Без даты просмотра',
   )
 })
+test('date grouping is dropped when the list is sorted by something else', () => {
+  const data = [
+    item(1, '2025-01-01', '2026-03-05'),
+    item(2, '2025-04-01', '2026-01-06'),
+  ]
+  const groups = groupMovies(data, 'date', 'watched', 'user_rating')
+  assert.equal(groups.length, 1)
+  assert.equal(groups[0].title, '')
+  assert.deepEqual(
+    groups[0].items.map((i) => i.id),
+    [1, 2],
+  )
+  assert.equal(groupMovies(data, 'date', 'watched', 'watched_at').length, 2)
+})
 test('default sort follows the date belonging to the current status', () => {
   assert.equal(defaultFilters('watched').sort, 'watched_at')
   assert.equal(defaultFilters('want_to_watch').sort, 'added_at')
 })
 test('Russian movie count labels', () => {
-  assert.deepEqual([1, 2, 5, 11, 21, 24].map(movieCount), [
-    '1 фильм',
-    '2 фильма',
-    '5 фильмов',
-    '11 фильмов',
-    '21 фильм',
-    '24 фильма',
-  ])
+  assert.deepEqual(
+    [1, 2, 5, 11, 21, 24].map((n) => contentCount(n, 'movie')),
+    ['1 фильм', '2 фильма', '5 фильмов', '11 фильмов', '21 фильм', '24 фильма'],
+  )
 })
 test('runtime is formatted without invented unknown values', () => {
   assert.equal(formatRuntime(undefined), '')

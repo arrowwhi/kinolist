@@ -1,16 +1,7 @@
 import type { Candidate, MediaType, Movie } from '../../api/types'
+import { plural } from '../../shared/lib/format.ts'
 
 type Metadata = Pick<Movie, 'media_type' | 'year' | 'season_count'>
-function plural(count: number, forms: readonly [string, string, string]) {
-  const last = Math.abs(count) % 100
-  return last >= 11 && last <= 14
-    ? forms[2]
-    : last % 10 === 1
-      ? forms[0]
-      : last % 10 >= 2 && last % 10 <= 4
-        ? forms[1]
-        : forms[2]
-}
 export function mediaLabel(type?: MediaType) {
   return type === 'tv' ? 'Сериал' : 'Фильм'
 }

@@ -47,11 +47,7 @@ func ClassifyInput(raw string) (Kind, string, error) {
 		return "", "", ErrInvalidReelURL
 	}
 
-	segments := strings.FieldsFunc(u.Path, func(r rune) bool { return r == '/' })
-	if len(segments) < 2 {
-		return "", "", ErrInvalidReelURL
-	}
-	if _, ok := reelPaths[strings.ToLower(segments[0])]; !ok {
+	if !hasReelPath(u.Path) {
 		return "", "", ErrInvalidReelURL
 	}
 
@@ -61,6 +57,19 @@ func ClassifyInput(raw string) (Kind, string, error) {
 	u.Scheme = "https"
 
 	return KindReel, u.String(), nil
+}
+
+// hasReelPath ищет сегмент рилса с идентификатором после него. Кроме
+// /reel/<code> Instagram отдаёт ссылки с префиксом: /<user>/reel/<code>
+// со страницы профиля и /share/reel/<token> из меню «Поделиться».
+func hasReelPath(path string) bool {
+	segments := strings.FieldsFunc(path, func(r rune) bool { return r == '/' })
+	for i := 0; i < len(segments)-1 && i < 2; i++ {
+		if _, ok := reelPaths[strings.ToLower(segments[i])]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func looksLikeURL(s string) bool {

@@ -66,11 +66,14 @@ func TestEnqueue(t *testing.T) {
 		name      string
 		input     string
 		fetcherOn bool
-		setup     func(d deps)
-		wantKind  domain.Kind
-		wantURL   string
-		wantTitle string
-		wantErr   error
+		// extractorOff — экстрактор по умолчанию включён, чтобы не
+		// повторять это в каждом случае.
+		extractorOff bool
+		setup        func(d deps)
+		wantKind     domain.Kind
+		wantURL      string
+		wantTitle    string
+		wantErr      error
 	}{
 		{
 			name: "reel url is queued as reel job", input: "https://instagram.com/reel/Abc123/", fetcherOn: true,
@@ -101,6 +104,12 @@ func TestEnqueue(t *testing.T) {
 			wantErr: domain.ErrFetcherDisabled,
 		},
 		{
+			name:  "reel rejected right away when extractor is not configured",
+			input: "https://instagram.com/reel/Abc123/", fetcherOn: true, extractorOff: true,
+			setup:   func(d deps) {},
+			wantErr: domain.ErrExtractorDisabled,
+		},
+		{
 			name: "foreign link is rejected", input: "https://tiktok.com/video/1",
 			setup: func(d deps) {}, wantErr: domain.ErrInvalidReelURL,
 		},
@@ -116,6 +125,7 @@ func TestEnqueue(t *testing.T) {
 
 			u, d := newUseCase(t, false)
 			d.fetcher.EXPECT().Enabled().Return(tt.fetcherOn).AnyTimes()
+			d.extractor.EXPECT().Enabled().Return(!tt.extractorOff).AnyTimes()
 			tt.setup(d)
 
 			job, err := u.Enqueue(context.Background(), 10, 20, tt.input)
@@ -361,6 +371,53 @@ func TestProcessFallsBackToSecondaryCatalog(t *testing.T) {
 	}
 }
 
+func TestProcessRetriesWhenPrimaryFailsAndFallbackIsEmpty(t *testing.T) {
+	t.Parallel()
+
+	u, d := newUseCase(t, true)
+
+	d.primary.EXPECT().Search(gomock.Any(), "Дюна", int16(0)).Return(nil, errors.New("tmdb: 503"))
+	d.primary.EXPECT().Provider().Return(movie.ProviderTMDB).AnyTimes()
+	d.fallback.EXPECT().Search(gomock.Any(), "Дюна", int16(0)).Return(nil, nil)
+	d.jobs.EXPECT().Update(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, j domain.Job) error {
+			if j.Status != domain.StatusPending {
+				t.Fatalf("status = %q, want pending for retry", j.Status)
+			}
+			return nil
+		})
+
+	out, err := u.Process(context.Background(), domain.Job{
+		ID: 1, UserID: 7, ChatID: 99, Kind: domain.KindTitle, QueryTitle: "Дюна",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Job.ID != 0 {
+		t.Fatalf("outcome = %+v, want silent retry", out)
+	}
+}
+
+func TestProcessStaysSilentWhenJobWasCancelled(t *testing.T) {
+	t.Parallel()
+
+	u, d := newUseCase(t, false)
+
+	d.primary.EXPECT().Search(gomock.Any(), "Дюна", int16(2021)).
+		Return([]movie.Candidate{candidate(438631, "Дюна", "Dune", 2021)}, nil)
+	d.jobs.EXPECT().Update(gomock.Any(), gomock.Any()).Return(domain.ErrJobNotFound)
+
+	out, err := u.Process(context.Background(), domain.Job{
+		ID: 1, UserID: 7, ChatID: 99, Kind: domain.KindTitle, QueryTitle: "Дюна", QueryYear: 2021,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Job.ID != 0 {
+		t.Fatalf("outcome = %+v, want nothing to notify", out)
+	}
+}
+
 // --- Confirm ---
 
 func TestConfirm(t *testing.T) {
@@ -530,5 +587,34 @@ func TestReject(t *testing.T) {
 
 	if err := u.Reject(context.Background(), 7, 1); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRejectFinishedJob(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		status  domain.Status
+		wantErr error
+	}{
+		{name: "done job cannot be cancelled", status: domain.StatusDone, wantErr: domain.ErrJobNotConfirmable},
+		{name: "failed job cannot be cancelled", status: domain.StatusFailed, wantErr: domain.ErrJobNotConfirmable},
+		{name: "repeated cancel is a no-op", status: domain.StatusCancelled},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			u, d := newUseCase(t, false)
+			d.jobs.EXPECT().GetForUser(gomock.Any(), int64(7), int64(1)).
+				Return(domain.Job{ID: 1, UserID: 7, Status: tt.status}, nil)
+
+			err := u.Reject(context.Background(), 7, 1)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tt.wantErr)
+			}
+		})
 	}
 }

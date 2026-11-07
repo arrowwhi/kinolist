@@ -46,6 +46,7 @@ var table = []entry{
 
 	{movie.ErrInvalidStatus, Response{http.StatusBadRequest, "invalid_status", "Недопустимый статус фильма"}},
 	{movie.ErrInvalidRating, Response{http.StatusBadRequest, "invalid_rating", "Оценка должна быть от 1 до 10"}},
+	{movie.ErrEmptyUpdate, Response{http.StatusBadRequest, "empty_update", "Нечего сохранять"}},
 	{movie.ErrEmptyQuery, Response{http.StatusBadRequest, "empty_query", "Пустой поисковый запрос"}},
 	{movie.ErrNoCandidates, Response{http.StatusNotFound, "no_candidates", "Ничего не нашлось по этому названию"}},
 	{enrichment.ErrEmptyInput, Response{http.StatusBadRequest, "empty_input", "Пустой запрос"}},

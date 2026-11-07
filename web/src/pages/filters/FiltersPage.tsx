@@ -9,7 +9,6 @@ import type { Navigate } from '../../shared/lib/navigation'
 import { Shell } from '../../widgets/app-shell/Shell'
 import { Button } from '../../shared/ui/Button'
 import { Chip } from '../../shared/ui/Chip'
-import { defaultFilters } from '../../features/collection/model'
 import type {
   CollectionFilters,
   CollectionStatus,
@@ -19,6 +18,7 @@ export function FiltersPage({
   genres,
   status,
   value,
+  defaults,
   onApply,
   navigate,
   back,
@@ -28,6 +28,8 @@ export function FiltersPage({
   genres: Genre[]
   status: CollectionStatus
   value: CollectionFilters
+  // Значения по умолчанию своего раздела: у режиссёра, например, без групп.
+  defaults: CollectionFilters
   onApply: (filters: CollectionFilters) => void
   navigate: Navigate
   back: () => void
@@ -183,10 +185,7 @@ export function FiltersPage({
               ? 'Применить фильтры'
               : `Показать ${contentCount(count.data.summary.movie_count, draft.mediaType)}`}
           </Button>
-          <Button
-            variant="secondary"
-            onClick={() => setDraft(defaultFilters(status))}
-          >
+          <Button variant="secondary" onClick={() => setDraft(defaults)}>
             Сбросить фильтры
           </Button>
         </div>

@@ -24,11 +24,20 @@ export function defaultFilters(status: CollectionStatus): CollectionFilters {
     groupBy: 'date',
   }
 }
+// Работы режиссёра немногочисленны, поэтому по умолчанию идут одним списком.
+export function directorFilters(status: CollectionStatus): CollectionFilters {
+  return { ...defaultFilters(status), groupBy: 'none' }
+}
 export function groupMovies(
   items: UserMovie[],
   groupBy: GroupBy,
   status: CollectionStatus,
+  sort?: CollectionFilters['sort'],
 ) {
+  // Разбивка по месяцам осмысленна, только когда список отсортирован по той
+  // же дате: иначе она рвёт порядок, например рейтинг по оценке.
+  const dateField = status === 'watched' ? 'watched_at' : 'added_at'
+  if (groupBy === 'date' && sort && sort !== dateField) groupBy = 'none'
   if (groupBy === 'none') return [{ title: '', items }]
   const groups = new Map<string, UserMovie[]>()
   for (const item of items) {

@@ -25,6 +25,8 @@ interface TelegramWebApp {
     offClick(handler: () => void): void
   }
   initData: string
+  version?: string
+  isVersionAtLeast?(version: string): boolean
   colorScheme: 'light' | 'dark'
   themeParams: TelegramThemeParams
   isExpanded: boolean

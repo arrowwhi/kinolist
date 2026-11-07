@@ -81,7 +81,7 @@ export function DirectorPicker({
       {resource.error && resource.page && (
         <ErrorState message={resource.error} onRetry={resource.loadMore} />
       )}
-      {resource.page && resource.page.items.length < resource.page.total && (
+      {resource.hasMore && (
         <Button
           variant="secondary"
           onClick={resource.loadMore}

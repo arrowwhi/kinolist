@@ -2,8 +2,9 @@ package collection
 
 import (
 	"context"
-	"errors"
 	"fmt"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/arrowwhi/kinolist/internal/domain/movie"
 	"github.com/arrowwhi/kinolist/internal/domain/user"
@@ -62,21 +63,39 @@ func (uc *UseCase) List(ctx context.Context, f movie.Filter) (Page, error) {
 		return Page{}, movie.ErrInvalidStatus
 	}
 
-	items, err := uc.movies.List(ctx, f)
-	if err != nil {
-		return Page{}, fmt.Errorf("list user movies: %w", err)
-	}
-
-	total, err := uc.movies.Count(ctx, f)
-	if err != nil {
-		return Page{}, fmt.Errorf("count user movies: %w", err)
-	}
-
-	summaryFilter := f
-	summaryFilter.Query = ""
-	summary, err := uc.movies.Summary(ctx, summaryFilter)
-	if err != nil {
-		return Page{}, fmt.Errorf("get summary: %w", err)
+	// Три запроса независимы, поэтому идут параллельно: страница коллекции
+	// ждёт самый медленный из них, а не сумму.
+	var (
+		items   []movie.UserMovie
+		total   int
+		summary movie.Summary
+	)
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		var err error
+		if items, err = uc.movies.List(gctx, f); err != nil {
+			return fmt.Errorf("list user movies: %w", err)
+		}
+		return nil
+	})
+	g.Go(func() error {
+		var err error
+		if total, err = uc.movies.Count(gctx, f); err != nil {
+			return fmt.Errorf("count user movies: %w", err)
+		}
+		return nil
+	})
+	g.Go(func() error {
+		summaryFilter := f
+		summaryFilter.Query = ""
+		var err error
+		if summary, err = uc.movies.Summary(gctx, summaryFilter); err != nil {
+			return fmt.Errorf("get summary: %w", err)
+		}
+		return nil
+	})
+	if err := g.Wait(); err != nil {
+		return Page{}, err
 	}
 	return Page{Items: items, Total: total, Limit: f.Limit, Offset: f.Offset, Summary: summary}, nil
 }
@@ -139,7 +158,7 @@ func validateUpdate(upd movie.Update) error {
 		}
 	}
 	if upd.Status == nil && upd.UserRating == nil && upd.Note == nil && upd.Review == nil {
-		return errors.New("update: nothing to change")
+		return movie.ErrEmptyUpdate
 	}
 	if upd.Status != nil && !upd.Status.Valid() {
 		return movie.ErrInvalidStatus

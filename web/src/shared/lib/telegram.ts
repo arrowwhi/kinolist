@@ -1,33 +1,62 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 export function webApp() {
   return window.Telegram?.WebApp
 }
-export function haptic(type: 'select' | 'success' | 'error' | 'light') {
-  const feedback = webApp()?.HapticFeedback
-  if (!feedback) return
-  if (type === 'select') feedback.selectionChanged()
-  else if (type === 'light') feedback.impactOccurred('light')
-  else feedback.notificationOccurred(type)
+// Скрипт SDK подключён всегда, поэтому сам объект WebApp есть и в обычном
+// браузере. Внутри Telegram его отличают непустые initData.
+export function insideTelegram() {
+  return Boolean(webApp()?.initData)
 }
-export function useTelegramSetup(onBack: () => void, canGoBack: boolean) {
+// Старые клиенты Telegram бросают исключение на методах новее своей версии,
+// а не игнорируют их. Ни один вызов SDK не должен ронять приложение.
+function call(minVersion: string, action: (app: TelegramWebApp) => void) {
+  const app = webApp()
+  if (!app) return
+  try {
+    if (app.isVersionAtLeast && !app.isVersionAtLeast(minVersion)) return
+    action(app)
+  } catch {
+    // Косметика SDK не стоит падения интерфейса.
+  }
+}
+export function haptic(type: 'select' | 'success' | 'error' | 'light') {
+  call('6.1', (app) => {
+    const feedback = app.HapticFeedback
+    if (type === 'select') feedback.selectionChanged()
+    else if (type === 'light') feedback.impactOccurred('light')
+    else feedback.notificationOccurred(type)
+  })
+}
+export function useTelegramSetup() {
   useEffect(() => {
-    const app = webApp()
-    app?.ready()
-    app?.expand()
-    app?.setHeaderColor?.('#111311')
-    app?.setBackgroundColor?.('#111311')
+    call('6.0', (app) => {
+      app.ready()
+      app.expand()
+    })
+    // Произвольный цвет шапки клиент понимает только с 6.9.
+    call('6.9', (app) => app.setHeaderColor?.('#111311'))
+    call('6.1', (app) => app.setBackgroundColor?.('#111311'))
   }, [])
+}
+// Нативная стрелка «назад» Telegram ведёт себя так же, как обработчик
+// текущей страницы: шаг назад в мастере, защита от ухода во время запроса.
+export function useTelegramBackButton(onBack: (() => void) | undefined) {
+  const handler = useRef(onBack)
+  handler.current = onBack
+  const visible = Boolean(onBack)
   useEffect(() => {
-    const button = webApp()?.BackButton
-    if (!button || !canGoBack) {
-      button?.hide()
-      return
-    }
-    button.show()
-    button.onClick(onBack)
-    return () => {
-      button.offClick(onBack)
-      button.hide()
-    }
-  }, [onBack, canGoBack])
+    const click = () => handler.current?.()
+    call('6.1', (app) => {
+      if (!app.BackButton) return
+      if (visible) {
+        app.BackButton.show()
+        app.BackButton.onClick(click)
+      } else app.BackButton.hide()
+    })
+    return () =>
+      call('6.1', (app) => {
+        app.BackButton?.offClick(click)
+        app.BackButton?.hide()
+      })
+  }, [visible])
 }

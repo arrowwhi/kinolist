@@ -145,6 +145,13 @@ export function useAddMovie(
         setError(errorMessage(err))
         if (err instanceof RequestError && err.existingUserMovieId)
           setExistingId(err.existingUserMovieId)
+        // Сервер уже закрыл задачу: выбирать другого кандидата из неё нельзя,
+        // остаются только «открыть в коллекции» и новый поиск.
+        if (
+          err instanceof RequestError &&
+          (err.existingUserMovieId || err.code === 'job_not_confirmable')
+        )
+          setJob((current) => current && { ...current, status: 'done' })
       }
     } finally {
       lock.current = false
