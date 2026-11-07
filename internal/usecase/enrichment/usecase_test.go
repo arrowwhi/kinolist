@@ -490,7 +490,7 @@ func TestConfirm(t *testing.T) {
 		d.tx.EXPECT().BeginTransaction(gomock.Any()).DoAndReturn(
 			func(ctx context.Context) (context.Context, error) { return ctx, nil })
 		d.tx.EXPECT().FinishTransaction(gomock.Any(), gomock.Any())
-		d.movies.EXPECT().GenresByTMDBIDs(gomock.Any(), gomock.Any()).Return(nil, nil)
+		d.movies.EXPECT().GenresByTMDBIDs(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 		d.movies.EXPECT().Upsert(gomock.Any(), gomock.Any()).Return(movie.Movie{ID: 55}, nil)
 		d.movies.EXPECT().Add(gomock.Any(), gomock.Any()).Return(movie.UserMovie{}, movie.ErrAlreadyInCollection)
 		d.jobs.EXPECT().Update(gomock.Any(), gomock.Any()).Return(nil)
@@ -520,7 +520,7 @@ func TestConfirm(t *testing.T) {
 					t.Fatalf("transaction would roll back on a duplicate: %v", *errPtr)
 				}
 			})
-		d.movies.EXPECT().GenresByTMDBIDs(gomock.Any(), gomock.Any()).Return(nil, nil)
+		d.movies.EXPECT().GenresByTMDBIDs(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 		d.movies.EXPECT().Upsert(gomock.Any(), gomock.Any()).Return(movie.Movie{ID: 55}, nil)
 		d.movies.EXPECT().Add(gomock.Any(), gomock.Any()).Return(movie.UserMovie{}, movie.ErrAlreadyInCollection)
 		d.jobs.EXPECT().Update(gomock.Any(), gomock.Any()).
@@ -616,5 +616,64 @@ func TestRejectFinishedJob(t *testing.T) {
 				t.Fatalf("err = %v, want %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestAddFromCatalogSavesWithoutJob(t *testing.T) {
+	t.Parallel()
+
+	u, d := newUseCase(t, false)
+	d.primary.EXPECT().Provider().Return(movie.ProviderTMDB).AnyTimes()
+	d.primary.EXPECT().Details(gomock.Any(), int32(77), movie.MediaTV).
+		Return(movie.Candidate{Provider: movie.ProviderTMDB, ExternalID: 77, MediaType: movie.MediaTV, Title: "Сериал"}, nil)
+	d.tx.EXPECT().BeginTransaction(gomock.Any()).DoAndReturn(
+		func(ctx context.Context) (context.Context, error) { return ctx, nil })
+	d.tx.EXPECT().FinishTransaction(gomock.Any(), gomock.Any())
+	d.movies.EXPECT().GenresByTMDBIDs(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	d.movies.EXPECT().Upsert(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, m movie.Movie) (movie.Movie, error) {
+			if m.TMDBID != 77 || m.MediaType != movie.MediaTV {
+				t.Fatalf("movie: %+v", m)
+			}
+			m.ID = 55
+			return m, nil
+		})
+	d.movies.EXPECT().Add(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, um movie.UserMovie) (movie.UserMovie, error) {
+			if um.Source != movie.SourceManual || um.Status != movie.StatusWantToWatch || um.SourceURL != "" {
+				t.Fatalf("user movie: %+v", um)
+			}
+			um.ID = 100
+			return um, nil
+		})
+	// Задачи нет — значит, и закрывать нечего: jobs.Update не ожидается.
+
+	got, err := u.AddFromCatalog(context.Background(), 7, movie.ProviderTMDB, 77, movie.ConfirmOptions{MediaType: movie.MediaTV})
+	if err != nil || got.ID != 100 {
+		t.Fatalf("got %+v %v", got, err)
+	}
+}
+
+func TestAddFromCatalogReportsDuplicate(t *testing.T) {
+	t.Parallel()
+
+	u, d := newUseCase(t, false)
+	d.primary.EXPECT().Provider().Return(movie.ProviderTMDB).AnyTimes()
+	d.primary.EXPECT().Details(gomock.Any(), int32(5), movie.MediaMovie).
+		Return(movie.Candidate{Provider: movie.ProviderTMDB, ExternalID: 5, MediaType: movie.MediaMovie, Title: "Дюна"}, nil)
+	d.tx.EXPECT().BeginTransaction(gomock.Any()).DoAndReturn(
+		func(ctx context.Context) (context.Context, error) { return ctx, nil })
+	d.tx.EXPECT().FinishTransaction(gomock.Any(), gomock.Any())
+	d.movies.EXPECT().GenresByTMDBIDs(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	d.movies.EXPECT().Upsert(gomock.Any(), gomock.Any()).Return(movie.Movie{ID: 55}, nil)
+	d.movies.EXPECT().Add(gomock.Any(), gomock.Any()).Return(movie.UserMovie{}, &movie.AlreadyInCollectionError{UserMovieID: 9})
+
+	_, err := u.AddFromCatalog(context.Background(), 7, movie.ProviderTMDB, 5, movie.ConfirmOptions{})
+	var dup *movie.AlreadyInCollectionError
+	if !errors.As(err, &dup) || dup.UserMovieID != 9 {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := u.AddFromCatalog(context.Background(), 7, movie.ProviderTMDB, 5, movie.ConfirmOptions{Status: "bad"}); !errors.Is(err, movie.ErrInvalidStatus) {
+		t.Fatalf("validation err = %v", err)
 	}
 }

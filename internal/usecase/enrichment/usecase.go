@@ -308,7 +308,7 @@ func (uc *UseCase) ConfirmWithOptions(ctx context.Context, userID, jobID int64, 
 	if detailErr == nil {
 		chosen = detailed
 	}
-	added, duplicate, err := uc.persist(ctx, userID, job, chosen, options)
+	added, duplicate, err := uc.persist(ctx, userID, &job, chosen, options)
 	if err != nil {
 		return movie.UserMovie{}, err
 	}
@@ -327,7 +327,7 @@ func (uc *UseCase) ConfirmWithOptions(ctx context.Context, userID, jobID int64, 
 func (uc *UseCase) persist(
 	ctx context.Context,
 	userID int64,
-	job enrichment.Job,
+	job *enrichment.Job,
 	chosen movie.Candidate,
 	options movie.ConfirmOptions,
 ) (result movie.UserMovie, duplicate bool, err error) {
@@ -347,9 +347,9 @@ func (uc *UseCase) persist(
 		return movie.UserMovie{}, false, fmt.Errorf("upsert movie: %w", err)
 	}
 
-	source := movie.SourceManual
-	if job.Kind == enrichment.KindReel {
-		source = movie.SourceReel
+	source, sourceURL := movie.SourceManual, ""
+	if job != nil && job.Kind == enrichment.KindReel {
+		source, sourceURL = movie.SourceReel, job.SourceURL
 	}
 
 	added, addErr := uc.movies.Add(ctx, movie.UserMovie{
@@ -358,7 +358,7 @@ func (uc *UseCase) persist(
 		Status:     options.Status,
 		UserRating: options.UserRating, Review: options.Review, Note: options.Note,
 		Source:    source,
-		SourceURL: job.SourceURL,
+		SourceURL: sourceURL,
 	})
 	switch {
 	case errors.Is(addErr, movie.ErrAlreadyInCollection):
@@ -373,11 +373,40 @@ func (uc *UseCase) persist(
 		result = added
 	}
 
-	if err = uc.closeJob(ctx, job, enrichment.StatusDone); err != nil {
-		return movie.UserMovie{}, false, err
+	if job != nil {
+		if err = uc.closeJob(ctx, *job, enrichment.StatusDone); err != nil {
+			return movie.UserMovie{}, false, err
+		}
 	}
 
 	return result, duplicate, nil
+}
+
+// AddFromCatalog добавляет работу в коллекцию по внешнему id, минуя поиск и
+// задачу: пользователь выбрал её в фильмографии режиссёра, где она уже
+// однозначно опознана.
+func (uc *UseCase) AddFromCatalog(ctx context.Context, userID int64, provider movie.Provider, externalID int32, options movie.ConfirmOptions) (movie.UserMovie, error) {
+	if err := options.Validate(); err != nil {
+		return movie.UserMovie{}, err
+	}
+	if externalID <= 0 {
+		return movie.UserMovie{}, movie.ErrNotFound
+	}
+	if options.Status == "" {
+		options.Status = movie.StatusWantToWatch
+	}
+	chosen, err := uc.details(ctx, movie.Candidate{Provider: provider, ExternalID: externalID, MediaType: options.MediaType.Normalize()})
+	if err != nil {
+		return movie.UserMovie{}, err
+	}
+	added, duplicate, err := uc.persist(ctx, userID, nil, chosen, options)
+	if err != nil {
+		return movie.UserMovie{}, err
+	}
+	if duplicate {
+		return movie.UserMovie{}, &movie.AlreadyInCollectionError{UserMovieID: added.ID}
+	}
+	return added, nil
 }
 
 // Reject отменяет задачу: пользователь сказал, что это не тот фильм.

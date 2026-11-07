@@ -17,6 +17,7 @@ type Config struct {
 	Postgres  Postgres
 	Telegram  Telegram
 	Worker    Worker
+	Directors Directors
 	TMDB      TMDB
 	Kinopoisk Kinopoisk
 	Instagram Instagram
@@ -68,6 +69,13 @@ type Worker struct {
 	PollInterval time.Duration
 	JobTimeout   time.Duration
 	MaxAttempts  int
+}
+
+// Directors — фоновое обновление фильмографий отслеживаемых режиссёров.
+type Directors struct {
+	WorksTTL     time.Duration
+	SyncInterval time.Duration
+	SyncBatch    int
 }
 
 type TMDB struct {
@@ -146,6 +154,11 @@ func Load(path string) (*Config, error) {
 			PollInterval: p.duration("WORKER_POLL_INTERVAL", 2*time.Second),
 			JobTimeout:   p.duration("WORKER_JOB_TIMEOUT", 60*time.Second),
 			MaxAttempts:  p.int("WORKER_MAX_ATTEMPTS", 3),
+		},
+		Directors: Directors{
+			WorksTTL:     p.duration("DIRECTOR_WORKS_TTL", 7*24*time.Hour),
+			SyncInterval: p.duration("DIRECTOR_SYNC_INTERVAL", 30*time.Minute),
+			SyncBatch:    p.int("DIRECTOR_SYNC_BATCH", 20),
 		},
 		TMDB: TMDB{
 			APIKey:   p.str("TMDB_API_KEY", ""),

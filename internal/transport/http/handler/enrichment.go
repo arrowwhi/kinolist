@@ -22,6 +22,7 @@ type enrichmentUseCase interface {
 	Reject(ctx context.Context, userID, jobID int64) error
 	ConfirmWithOptions(ctx context.Context, userID, jobID int64, provider movie.Provider, externalID int32, options movie.ConfirmOptions) (movie.UserMovie, error)
 	CandidateDetails(ctx context.Context, userID, jobID int64, provider movie.Provider, externalID int32, mediaTypes ...movie.MediaType) (movie.Movie, error)
+	AddFromCatalog(ctx context.Context, userID int64, provider movie.Provider, externalID int32, options movie.ConfirmOptions) (movie.UserMovie, error)
 }
 
 type Enrichment struct {
@@ -109,6 +110,37 @@ func (h *Enrichment) Confirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	writeJSON(w, http.StatusCreated, converter.UserMovie(um))
+}
+
+// AddFromCatalog добавляет работу по внешнему id, без поиска и задачи:
+// так работает «＋» в фильмографии режиссёра.
+func (h *Enrichment) AddFromCatalog(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserID(r.Context())
+	if !ok {
+		writeError(w, r, user.ErrInvalidTelegram)
+		return
+	}
+	var req dto.AddMovieRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, r, errmap.ErrBadRequest)
+		return
+	}
+	provider := movie.Provider(req.Provider)
+	if (provider != movie.ProviderTMDB && provider != movie.ProviderKinopoisk) || req.ExternalID <= 0 {
+		writeError(w, r, errmap.ErrBadRequest)
+		return
+	}
+	mediaType := movie.MediaType(req.MediaType)
+	if !mediaType.Valid() {
+		writeError(w, r, movie.ErrInvalidMediaType)
+		return
+	}
+	um, err := h.uc.AddFromCatalog(r.Context(), userID, provider, req.ExternalID, movie.ConfirmOptions{MediaType: mediaType, Status: movie.Status(req.Status)})
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
 	writeJSON(w, http.StatusCreated, converter.UserMovie(um))
 }
 

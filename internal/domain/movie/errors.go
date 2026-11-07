@@ -4,6 +4,8 @@ import "errors"
 
 var (
 	ErrDirectorNotFound      = errors.New("director not found")
+	ErrPersonNotFound        = errors.New("person not found in catalog")
+	ErrInvalidPersonID       = errors.New("invalid person id")
 	ErrInvalidDirectorFilter = errors.New("invalid director filter")
 	ErrInvalidMediaType      = errors.New("invalid media type")
 	ErrReviewTooLong         = errors.New("review exceeds 5000 characters")

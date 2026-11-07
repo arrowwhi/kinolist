@@ -5,6 +5,15 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type { CollectionStatus } from '../features/collection/model'
 import { HomePage } from '../pages/home/HomePage'
+import { HomePageV2 } from '../pages/home/HomePageV2'
+import { MyDirectorsPage } from '../pages/directors-v2/MyDirectorsPage'
+import type { MyDirectorsPreferences } from '../pages/directors-v2/MyDirectorsPage'
+import {
+  DirectorProfilePage,
+  defaultFilmography,
+} from '../pages/directors-v2/DirectorProfilePage'
+import type { FilmographyPreferences } from '../pages/directors-v2/DirectorProfilePage'
+import { AddDirectorPage } from '../pages/directors-v2/AddDirectorPage'
 import { home } from './route'
 import { useNavigation } from './navigation'
 import { Shell } from '../widgets/app-shell/Shell'
@@ -26,6 +35,14 @@ export function App() {
   const history = useRecentCandidates()
   const [directorPreferences, setDirectorPreferences] =
     useState<DirectorPreferences>({ search: '', sort: 'name' })
+  const [myDirectors, setMyDirectors] = useState<MyDirectorsPreferences>({
+    scope: 'all',
+    sort: 'name',
+    search: '',
+  })
+  const [filmography, setFilmography] = useState<
+    Record<number, FilmographyPreferences>
+  >({})
   const [revision, setRevision] = useState(0)
   const [toast, setToast] = useState('')
   const timer = useRef<number | undefined>(undefined)
@@ -47,10 +64,47 @@ export function App() {
   const routeMatch = path.match(/^\/movie\/(\d+)(?:\/(note|rate))?$/)
   const directorMatch = path.match(/^\/directors\/(\d+)$/)
   const genreMatch = path.match(/^\/genres\/(\d+)$/)
+  const directorV2Match = path.match(/^\/v2\/directors\/(\d+)$/)
   let content
   if (path === home)
     content = <HomePage navigate={navigate} revision={revision} />
-  else if (routeMatch && Number(routeMatch[1]) > 0) {
+  else if (path === '/v2')
+    content = <HomePageV2 navigate={navigate} revision={revision} />
+  else if (path === '/v2/directors')
+    content = (
+      <MyDirectorsPage
+        value={myDirectors}
+        onChange={setMyDirectors}
+        revision={revision}
+        navigate={navigate}
+        back={() => navigate('/v2', true)}
+      />
+    )
+  else if (path === '/v2/directors/add')
+    content = (
+      <AddDirectorPage
+        initialQuery={params.get('q') ?? ''}
+        navigate={navigate}
+        back={back}
+        changed={changed}
+      />
+    )
+  else if (directorV2Match && Number(directorV2Match[1]) > 0) {
+    const id = Number(directorV2Match[1])
+    content = (
+      <DirectorProfilePage
+        key={id}
+        id={id}
+        preferences={filmography[id] ?? defaultFilmography}
+        onPreferences={(value) =>
+          setFilmography((previous) => ({ ...previous, [id]: value }))
+        }
+        navigate={navigate}
+        back={back}
+        changed={changed}
+      />
+    )
+  } else if (routeMatch && Number(routeMatch[1]) > 0) {
     const props = { id: Number(routeMatch[1]), navigate, back, changed }
     content =
       routeMatch[2] === 'note' ? (

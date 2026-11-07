@@ -23,6 +23,7 @@ type RouterDeps struct {
 	Metrics   *metrics.Metrics
 	Movies    *handler.Movie
 	Jobs      *handler.Enrichment
+	Directors *handler.Directors
 	Health    *handler.Health
 	WebAssets fs.FS
 	// ResolveUser превращает подтверждённую Telegram личность во внутренний
@@ -59,9 +60,18 @@ func NewRouter(d RouterDeps) http.Handler {
 		api.Get("/genres", d.Movies.Genres)
 		api.Get("/directors", d.Movies.ListDirectors)
 		api.Get("/directors/{id}", d.Movies.GetDirector)
+		// Раздел «Мои режиссёры»: подписки и полная фильмография из каталога.
+		api.Get("/my-directors", d.Directors.Mine)
+		api.Get("/people/search", d.Directors.Search)
+		api.Post("/directors/import", d.Directors.Import)
+		api.Post("/directors/follow-by-tmdb", d.Directors.FollowByTMDB)
+		api.Get("/directors/{id}/profile", d.Directors.Profile)
+		api.Put("/directors/{id}/follow", d.Directors.Follow)
+		api.Delete("/directors/{id}/follow", d.Directors.Unfollow)
 
 		api.Route("/movies", func(m chi.Router) {
 			m.Get("/", d.Movies.List)
+			m.Post("/", d.Jobs.AddFromCatalog)
 			m.Get("/{id}", d.Movies.Get)
 			m.Patch("/{id}", d.Movies.Update)
 			m.Delete("/{id}", d.Movies.Delete)

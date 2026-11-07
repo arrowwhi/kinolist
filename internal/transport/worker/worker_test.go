@@ -180,3 +180,35 @@ func TestWorkerStopsCleanlyWithNoWork(t *testing.T) {
 		t.Fatalf("run: %v", err)
 	}
 }
+
+type fakeDirectorSync struct{ calls chan int }
+
+func (f fakeDirectorSync) SyncStale(_ context.Context, limit int) (int, error) {
+	f.calls <- limit
+	return 1, nil
+}
+
+func TestDirectorSyncRunsImmediatelyAndStops(t *testing.T) {
+	calls := make(chan int, 4)
+	s := worker.NewDirectorSync(fakeDirectorSync{calls: calls}, zap.NewNop(), time.Hour, 7)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- s.Run(ctx) }()
+	select {
+	case limit := <-calls:
+		if limit != 7 {
+			t.Fatalf("limit = %d", limit)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("first sync did not run on start")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("sync did not stop")
+	}
+}
