@@ -10,6 +10,8 @@ import (
 )
 
 func (r *MovieRepository) replaceDirectors(ctx context.Context, movieID int64, directors []movie.Director) error {
+	ctx = queryName(ctx, "movie.replace_directors")
+
 	q := r.tx.Querier(ctx)
 	if _, err := q.Exec(ctx, `DELETE FROM movie_directors WHERE movie_id=$1`, movieID); err != nil {
 		return fmt.Errorf("clear directors: %w", err)
@@ -64,6 +66,8 @@ func (r *MovieRepository) replaceDirectors(ctx context.Context, movieID int64, d
 }
 
 func (r *MovieRepository) directorsForMovies(ctx context.Context, ids []int64) (map[int64][]movie.Director, error) {
+	ctx = queryName(ctx, "movie.directors_for_movies")
+
 	out := make(map[int64][]movie.Director, len(ids))
 	if len(ids) == 0 {
 		return out, nil
@@ -104,6 +108,8 @@ func scanDirector(row scanner) (movie.DirectorStats, error) {
 }
 
 func (r *MovieRepository) GetDirector(ctx context.Context, userID, directorID int64, mt movie.MediaType) (movie.DirectorStats, error) {
+	ctx = queryName(ctx, "movie.get_director")
+
 	d, err := scanDirector(r.tx.Querier(ctx).QueryRow(ctx, `SELECT * FROM (`+directorStatsSQL+`) s WHERE id=$3`, userID, mt, directorID))
 	if isNoRows(err) {
 		return d, movie.ErrDirectorNotFound
@@ -115,6 +121,8 @@ func (r *MovieRepository) GetDirector(ctx context.Context, userID, directorID in
 }
 
 func (r *MovieRepository) ListDirectors(ctx context.Context, f movie.DirectorFilter) ([]movie.DirectorStats, int, error) {
+	ctx = queryName(ctx, "movie.list_directors")
+
 	f = f.Normalize()
 	order := "lower(name)"
 	switch f.Sort {

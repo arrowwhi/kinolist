@@ -1,28 +1,27 @@
 package handler
 
 import (
-	"context"
 	"net/http"
 	"sync/atomic"
-	"time"
-)
 
-type pinger interface {
-	Ping(ctx context.Context) error
-}
+	"github.com/arrowwhi/infrastructure/observability/health"
+)
 
 const statusKey = "status"
 
 // Health разделяет liveness и readiness: процесс может быть жив, но не
 // готов принимать трафик — например, во время остановки.
+//
+// Проверки зависимостей живут в общем реестре инфраструктуры: тот же реестр
+// отдаёт /ready на служебном порту и публикует метрики health.check.*.
 type Health struct {
-	db      pinger
+	checks  *health.Registry
 	ready   atomic.Bool
 	version string
 }
 
-func NewHealth(db pinger, version string) *Health {
-	h := &Health{db: db, version: version}
+func NewHealth(checks *health.Registry, version string) *Health {
+	h := &Health{checks: checks, version: version}
 	h.ready.Store(true)
 	return h
 }
@@ -43,15 +42,26 @@ func (h *Health) Ready(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-	defer cancel()
+	if h.checks == nil {
+		writeJSON(w, http.StatusOK, map[string]string{statusKey: "ok"})
+		return
+	}
 
-	if err := h.db.Ping(ctx); err != nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
-			statusKey: "unavailable", "dependency": "postgres",
+	report := h.checks.Check(r.Context())
+	if !report.Ready() {
+		// Наружу — только имена упавших зависимостей, без текстов ошибок.
+		failed := make([]string, 0, len(report.Checks))
+		for name, res := range report.Checks {
+			if res.Status == health.StatusFail && res.Critical {
+				failed = append(failed, name)
+			}
+		}
+
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			statusKey: "unavailable", "dependencies": failed,
 		})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{statusKey: "ok"})
+	writeJSON(w, http.StatusOK, map[string]string{statusKey: string(report.Status)})
 }

@@ -7,48 +7,51 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"go.uber.org/zap"
+
+	"github.com/arrowwhi/infrastructure/observability/metrics"
+	"github.com/arrowwhi/infrastructure/observability/tracing"
 
 	"github.com/arrowwhi/kinolist/internal/config"
-	"github.com/arrowwhi/kinolist/internal/pkg/metrics"
 	"github.com/arrowwhi/kinolist/internal/transport/http/handler"
 	"github.com/arrowwhi/kinolist/internal/transport/http/middleware"
 )
 
 // RouterDeps — всё, что нужно роутеру. Собирается в app.
 type RouterDeps struct {
-	Config    *config.Config
-	Log       *zap.Logger
-	Metrics   *metrics.Metrics
-	Movies    *handler.Movie
-	Jobs      *handler.Enrichment
-	Directors *handler.Directors
-	Health    *handler.Health
-	WebAssets fs.FS
+	Config *config.Config
+	// ServiceName — имя сервиса в метриках и трейсах HTTP.
+	ServiceName string
+	Movies      *handler.Movie
+	Jobs        *handler.Enrichment
+	Directors   *handler.Directors
+	Health      *handler.Health
+	WebAssets   fs.FS
 	// ResolveUser превращает подтверждённую Telegram личность во внутренний
 	// id пользователя, заводя его при первом обращении.
 	ResolveUser func(context.Context, middleware.Identity) (int64, error)
 	// TelegramWebhook монтируется только в режиме webhook.
-	TelegramWebhook http.HandlerFunc
+	TelegramWebhook http.Handler
 }
 
 func NewRouter(d RouterDeps) http.Handler {
 	r := chi.NewRouter()
 
+	// Трейсинг первым: спан запроса уже открыт, когда пишутся логи, поэтому
+	// у записей есть trace_id. Метрики (http.server.*) размечены шаблоном маршрута chi.
+	r.Use(tracing.Middleware(d.ServiceName))
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Recovery)
-	r.Use(middleware.Logger(d.Log))
-	r.Use(middleware.Metrics(d.Metrics))
+	r.Use(middleware.Logger)
+	r.Use(metrics.Middleware(d.ServiceName))
 
 	// Служебные эндпоинты живут вне таймаута и вне авторизации.
-	// /metrics здесь нет: он слушает отдельный внутренний порт (NewMetricsHandler),
-	// а проба готовности не должна зависеть от нагрузки на API.
+	// /metrics здесь нет: он на служебном порту инфраструктуры (METRICS_ADDR),
+	// который не публикуется наружу.
 	r.Get("/healthz", d.Health.Live)
 	r.Get("/readyz", d.Health.Ready)
 
 	if d.TelegramWebhook != nil {
-		r.Post(d.Config.Telegram.WebhookPath, d.TelegramWebhook)
+		r.Method(http.MethodPost, d.Config.Telegram.WebhookPath, d.TelegramWebhook)
 	}
 
 	r.Route("/api/v1", func(api chi.Router) {
@@ -120,13 +123,4 @@ func spaHandler(assets fs.FS) http.Handler {
 
 		files.ServeHTTP(w, r)
 	})
-}
-
-// NewMetricsHandler отдаёт метрики Prometheus. Он монтируется на отдельный
-// адрес METRICS_ADDR, который не публикуется наружу: в публичном роутере
-// /metrics раскрывал бы маршруты и нагрузку всему интернету.
-func NewMetricsHandler(m *metrics.Metrics) http.Handler {
-	mux := http.NewServeMux()
-	mux.Handle("GET /metrics", promhttp.HandlerFor(m.Registry(), promhttp.HandlerOpts{}))
-	return mux
 }

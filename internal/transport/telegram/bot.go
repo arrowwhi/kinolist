@@ -1,12 +1,16 @@
+// Package telegram — обработчики бота kinolist поверх скелета инфраструктуры
+// (github.com/arrowwhi/infrastructure/telegram/bot): получение обновлений
+// (polling или webhook), порядок обработки внутри чата, лимиты Bot API, логи,
+// метрики и трейсы живут там, здесь — только сценарии kinolist.
 package telegram
 
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 
-	"go.uber.org/zap"
+	"github.com/arrowwhi/infrastructure/telegram/api"
+	tgbot "github.com/arrowwhi/infrastructure/telegram/bot"
 
 	"github.com/arrowwhi/kinolist/internal/domain/enrichment"
 	"github.com/arrowwhi/kinolist/internal/domain/movie"
@@ -30,219 +34,234 @@ type (
 )
 
 type Bot struct {
-	api        *API
 	enrichment enrichmentUseCase
 	collection collectionUseCase
-	log        *zap.Logger
 	webAppURL  string
 }
 
-func NewBot(api *API, e enrichmentUseCase, c collectionUseCase, log *zap.Logger, webAppURL string) *Bot {
-	return &Bot{api: api, enrichment: e, collection: c, log: log, webAppURL: webAppURL}
+func NewBot(e enrichmentUseCase, c collectionUseCase, webAppURL string) *Bot {
+	return &Bot{enrichment: e, collection: c, webAppURL: webAppURL}
 }
 
-// Setup регистрирует команды и кнопку меню. Ошибки здесь не фатальны:
-// бот работает и без обновлённого меню.
-func (b *Bot) Setup(ctx context.Context) error {
-	commands := []BotCommand{
-		{Command: "start", Description: "Начать"},
-		{Command: "collection", Description: "Открыть коллекцию"},
-		{Command: "help", Description: "Справка"},
-	}
-	if err := b.api.SetMyCommands(ctx, commands); err != nil {
-		return fmt.Errorf("set bot commands: %w", err)
+type userKey struct{}
+
+// Register вешает обработчики kinolist на бота инфраструктуры. Команды с
+// описанием попадают в меню бота при старте.
+func (b *Bot) Register(r *tgbot.Bot) {
+	r.Use(b.ignoreBots, b.resolveUserMiddleware)
+
+	r.Command("start", "Начать", b.start)
+	r.Command("collection", "Открыть коллекцию", b.collectionCmd)
+	r.Command("help", "Справка", b.help)
+
+	r.Callback(actionConfirm, b.confirmCallback)
+	r.Callback(actionPick, b.confirmCallback)
+	r.Callback(actionReject, b.rejectCallback)
+	r.Callback(actionOther, b.otherCallback)
+
+	r.Text(b.search)
+	r.Default(b.fallback)
+}
+
+// SetupMenuButton ставит кнопку меню чата, открывающую Mini App. Ошибка не
+// фатальна: бот работает и без неё.
+func (b *Bot) SetupMenuButton(ctx context.Context, client *api.Client) error {
+	if b.webAppURL == "" {
+		return nil
 	}
 
-	if b.webAppURL != "" {
-		if err := b.api.SetChatMenuButton(ctx, b.webAppURL); err != nil {
-			return fmt.Errorf("set chat menu button: %w", err)
+	return client.Call(ctx, "setChatMenuButton", 0, map[string]any{
+		"menu_button": map[string]any{
+			"type":    "web_app",
+			"text":    "Коллекция",
+			"web_app": api.WebAppInfo{URL: b.webAppURL},
+		},
+	}, nil)
+}
+
+// ignoreBots отбрасывает сообщения от других ботов.
+func (b *Bot) ignoreBots(next tgbot.HandlerFunc) tgbot.HandlerFunc {
+	return func(c *tgbot.Context) error {
+		if u := c.User(); u == nil || u.IsBot {
+			return nil
 		}
+
+		return next(c)
+	}
+}
+
+// resolveUserMiddleware заводит или находит пользователя kinolist по Telegram-личности.
+func (b *Bot) resolveUserMiddleware(next tgbot.HandlerFunc) tgbot.HandlerFunc {
+	return func(c *tgbot.Context) error {
+		from := c.User()
+
+		c.Context = logger.With(c.Context, "telegram_id", from.ID)
+
+		u, err := b.collection.ResolveUser(c, user.User{
+			TelegramID:   from.ID,
+			Username:     from.Username,
+			FirstName:    from.FirstName,
+			LanguageCode: from.LanguageCode,
+		})
+		if err != nil {
+			logger.Error(c).Err(err).Msg("resolve user failed")
+
+			if c.Callback() != nil {
+				return c.Answer("Не удалось вас опознать", false)
+			}
+
+			b.reply(c, "⚠️ Не получилось вас опознать. Попробуйте ещё раз.")
+
+			return nil
+		}
+
+		c.Context = context.WithValue(c.Context, userKey{}, u)
+
+		return next(c)
+	}
+}
+
+func currentUser(c *tgbot.Context) user.User {
+	u, _ := c.Value(userKey{}).(user.User)
+	return u
+}
+
+func (b *Bot) start(c *tgbot.Context) error {
+	b.send(c, startText(currentUser(c).FirstName), openAppKeyboard(b.webAppURL))
+	return nil
+}
+
+func (b *Bot) help(c *tgbot.Context) error {
+	b.send(c, helpText, nil)
+	return nil
+}
+
+func (b *Bot) collectionCmd(c *tgbot.Context) error {
+	b.send(c, "Ваша коллекция:", openAppKeyboard(b.webAppURL))
+	return nil
+}
+
+// search ставит название в очередь обогащения; ответ с кандидатами пришлёт воркер.
+func (b *Bot) search(c *tgbot.Context) error {
+	text := strings.TrimSpace(c.Text())
+	if text == "" {
+		b.reply(c, "Пришлите название фильма или сериала.")
+		return nil
+	}
+
+	if _, err := b.enrichment.Enqueue(c, currentUser(c).ID, c.ChatID(), text); err != nil {
+		b.reply(c, failureText(err))
+		return nil
+	}
+
+	b.reply(c, "🔎 Ищу фильм…")
+
+	return nil
+}
+
+// fallback — неизвестные команды, сообщения без текста и устаревшие кнопки.
+func (b *Bot) fallback(c *tgbot.Context) error {
+	switch {
+	case c.Callback() != nil:
+		return c.Answer("Кнопка устарела", false)
+	case c.Command() != "":
+		b.reply(c, "Не знаю такой команды. Посмотрите /help.")
+	default:
+		b.reply(c, "Пришлите название фильма или сериала.")
 	}
 
 	return nil
 }
 
-// Handle — единая точка входа для обоих режимов получения апдейтов.
-func (b *Bot) Handle(ctx context.Context, u Update) {
-	switch {
-	case u.Message != nil:
-		b.handleMessage(ctx, u.Message)
-	case u.CallbackQuery != nil:
-		b.handleCallback(ctx, u.CallbackQuery)
-	}
-}
-
-func (b *Bot) handleMessage(ctx context.Context, m *Message) {
-	if m.From == nil || m.From.IsBot {
-		return
-	}
-
-	ctx = logger.With(ctx, zap.Int64("telegram_id", m.From.ID))
-
-	u, err := b.resolveUser(ctx, m.From)
+// parseButton разбирает data кнопки и снимает клавиатуру: повторное нажатие уже
+// ничего не изменит.
+func (b *Bot) parseButton(c *tgbot.Context) (callback, bool) {
+	cb, err := parseCallback(c.CallbackData())
 	if err != nil {
-		b.log.Error("resolve user failed", zap.Error(err))
-		b.reply(ctx, m.Chat.ID, "⚠️ Не получилось вас опознать. Попробуйте ещё раз.")
-		return
+		logger.Warn(c).Err(err).Msg("malformed callback data")
+		_ = c.Answer("Кнопка устарела", false)
+
+		return callback{}, false
 	}
 
-	text := strings.TrimSpace(m.Text)
-	if text == "" {
-		b.reply(ctx, m.Chat.ID, "Пришлите название фильма или сериала.")
-		return
-	}
-
-	if strings.HasPrefix(text, "/") {
-		b.handleCommand(ctx, m, text, u)
-		return
-	}
-
-	b.enqueue(ctx, u.ID, m.Chat.ID, text)
-}
-
-func (b *Bot) handleCommand(ctx context.Context, m *Message, text string, u user.User) {
-	// Команда может прийти как "/start@botname" — имя бота нам не нужно.
-	command, _, _ := strings.Cut(strings.TrimPrefix(text, "/"), " ")
-	command, _, _ = strings.Cut(command, "@")
-
-	switch command {
-	case "start":
-		b.send(ctx, SendMessageRequest{
-			ChatID:      m.Chat.ID,
-			Text:        startText(u.FirstName),
-			ParseMode:   parseModeHTML,
-			ReplyMarkup: openAppKeyboard(b.webAppURL),
-		})
-	case "help":
-		b.send(ctx, SendMessageRequest{
-			ChatID: m.Chat.ID, Text: helpText, ParseMode: parseModeHTML,
-		})
-	case "collection":
-		b.send(ctx, SendMessageRequest{
-			ChatID:      m.Chat.ID,
-			Text:        "Ваша коллекция:",
-			ReplyMarkup: openAppKeyboard(b.webAppURL),
-		})
-	default:
-		b.reply(ctx, m.Chat.ID, "Не знаю такой команды. Посмотрите /help.")
-	}
-}
-
-func (b *Bot) enqueue(ctx context.Context, userID, chatID int64, input string) {
-	if _, err := b.enrichment.Enqueue(ctx, userID, chatID, input); err != nil {
-		b.reply(ctx, chatID, failureText(err))
-		return
-	}
-
-	b.reply(ctx, chatID, "🔎 Ищу фильм…")
-}
-
-func (b *Bot) handleCallback(ctx context.Context, q *CallbackQuery) {
-	if q.From == nil {
-		return
-	}
-
-	ctx = logger.With(ctx, zap.Int64("telegram_id", q.From.ID))
-
-	// Ответить на callback нужно всегда, иначе у пользователя навсегда
-	// останется крутящийся индикатор на кнопке.
-	answer := "Готово"
-	defer func() {
-		if err := b.api.AnswerCallbackQuery(ctx, q.ID, answer); err != nil {
-			b.log.Warn("answer callback failed", zap.Error(err))
-		}
-	}()
-
-	u, err := b.resolveUser(ctx, q.From)
-	if err != nil {
-		answer = "Не удалось вас опознать"
-		return
-	}
-
-	c, err := parseCallback(q.Data)
-	if err != nil {
-		b.log.Warn("malformed callback data", zap.Error(err))
-		answer = "Кнопка устарела"
-		return
-	}
-
-	chatID := int64(0)
-	messageID := 0
-	if q.Message != nil {
-		chatID = q.Message.Chat.ID
-		messageID = q.Message.MessageID
-	}
-
-	// Клавиатуру снимаем сразу: повторное нажатие уже ничего не изменит.
-	if chatID != 0 && messageID != 0 {
-		if err := b.api.EditMessageReplyMarkup(ctx, chatID, messageID, nil); err != nil {
-			b.log.Debug("clear keyboard failed", zap.Error(err))
+	if m := c.Message(); m != nil {
+		if err := c.API().EditMessageReplyMarkup(c, m.Chat.ID, m.MessageID, nil); err != nil && !api.IsMessageNotModified(err) {
+			logger.Debug(c).Err(err).Msg("clear keyboard failed")
 		}
 	}
 
-	switch c.Action {
-	case actionConfirm, actionPick:
-		answer = b.confirm(ctx, u.ID, chatID, c)
-	case actionReject:
-		if err := b.enrichment.Reject(ctx, u.ID, c.JobID); err != nil {
-			b.log.Warn("reject job failed", zap.Error(err))
-		}
-		b.reply(ctx, chatID, "Отменил. Пришлите другое название, если нужно.")
-		answer = "Отменено"
-	case actionOther:
-		if err := b.enrichment.Reject(ctx, u.ID, c.JobID); err != nil {
-			b.log.Warn("reject job failed", zap.Error(err))
-		}
-		b.reply(ctx, chatID, "Напишите название фильма текстом — поищу заново.")
-		answer = "Хорошо"
-	default:
-		answer = "Кнопка устарела"
-	}
+	return cb, true
 }
 
-func (b *Bot) confirm(ctx context.Context, userID, chatID int64, c callback) string {
-	um, err := b.enrichment.Confirm(ctx, userID, c.JobID, c.Provider, c.ExternalID, c.MediaType)
+func (b *Bot) confirmCallback(c *tgbot.Context) error {
+	cb, ok := b.parseButton(c)
+	if !ok {
+		return nil
+	}
+
+	um, err := b.enrichment.Confirm(c, currentUser(c).ID, cb.JobID, cb.Provider, cb.ExternalID, cb.MediaType)
 	switch {
 	case errors.Is(err, movie.ErrAlreadyInCollection):
-		b.reply(ctx, chatID, "📌 Этот фильм уже есть в вашей коллекции.")
-		return "Уже в коллекции"
+		b.reply(c, "📌 Этот фильм уже есть в вашей коллекции.")
+		return c.Answer("Уже в коллекции", false)
 	case err != nil:
-		b.log.Error("confirm failed", zap.Error(err))
-		b.reply(ctx, chatID, failureText(err))
-		return "Не получилось"
+		logger.Error(c).Err(err).Msg("confirm failed")
+		b.reply(c, failureText(err))
+		return c.Answer("Не получилось", false)
 	}
 
-	b.send(ctx, SendMessageRequest{
-		ChatID:      chatID,
-		Text:        addedText(um),
-		ParseMode:   parseModeHTML,
-		ReplyMarkup: openAppKeyboard(b.webAppURL),
-	})
+	b.send(c, addedText(um), openAppKeyboard(b.webAppURL))
 
-	return "Добавлено"
+	return c.Answer("Добавлено", false)
 }
 
-func (b *Bot) resolveUser(ctx context.Context, from *User) (user.User, error) {
-	return b.collection.ResolveUser(ctx, user.User{
-		TelegramID:   from.ID,
-		Username:     from.Username,
-		FirstName:    from.FirstName,
-		LanguageCode: from.LanguageCode,
-	})
+func (b *Bot) rejectCallback(c *tgbot.Context) error {
+	cb, ok := b.parseButton(c)
+	if !ok {
+		return nil
+	}
+
+	if err := b.enrichment.Reject(c, currentUser(c).ID, cb.JobID); err != nil {
+		logger.Warn(c).Err(err).Msg("reject job failed")
+	}
+
+	b.reply(c, "Отменил. Пришлите другое название, если нужно.")
+
+	return c.Answer("Отменено", false)
 }
 
-func (b *Bot) reply(ctx context.Context, chatID int64, text string) {
-	if chatID == 0 {
+func (b *Bot) otherCallback(c *tgbot.Context) error {
+	cb, ok := b.parseButton(c)
+	if !ok {
+		return nil
+	}
+
+	if err := b.enrichment.Reject(c, currentUser(c).ID, cb.JobID); err != nil {
+		logger.Warn(c).Err(err).Msg("reject job failed")
+	}
+
+	b.reply(c, "Напишите название фильма текстом — поищу заново.")
+
+	return c.Answer("Хорошо", false)
+}
+
+func (b *Bot) reply(c *tgbot.Context, text string) {
+	b.send(c, text, nil)
+}
+
+// send отправляет HTML-сообщение без превью ссылок. Ошибка отправки только
+// логируется: пользователю её всё равно не показать.
+func (b *Bot) send(c *tgbot.Context, text string, kb *api.InlineKeyboardMarkup) {
+	if c.ChatID() == 0 {
 		return
 	}
-	b.send(ctx, SendMessageRequest{ChatID: chatID, Text: text, ParseMode: parseModeHTML})
-}
 
-func (b *Bot) send(ctx context.Context, req SendMessageRequest) {
-	if req.LinkPreview == nil {
-		req.LinkPreview = &LinkPreviewOptions{IsDisabled: true}
+	opts := []tgbot.SendOption{tgbot.WithParseMode(parseModeHTML), tgbot.WithoutPreview()}
+	if kb != nil {
+		opts = append(opts, tgbot.WithKeyboard(kb))
 	}
-	if _, err := b.api.SendMessage(ctx, req); err != nil {
-		b.log.Warn("send message failed", zap.Error(err), zap.Int64("chat_id", req.ChatID))
+
+	if _, err := c.Reply(text, opts...); err != nil {
+		logger.Warn(c).Err(err).Int64("chat_id", c.ChatID()).Msg("send message failed")
 	}
 }

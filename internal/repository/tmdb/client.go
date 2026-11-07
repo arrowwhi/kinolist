@@ -14,6 +14,7 @@ import (
 
 	"github.com/arrowwhi/kinolist/internal/config"
 	"github.com/arrowwhi/kinolist/internal/domain/movie"
+	"github.com/arrowwhi/kinolist/internal/pkg/httpclient"
 )
 
 // cache вынесен в интерфейс на стороне потребителя: адаптеру всё равно,
@@ -34,7 +35,7 @@ type Client struct {
 
 func New(cfg config.TMDB, c cache) *Client {
 	return &Client{
-		http:     &http.Client{Timeout: cfg.Timeout},
+		http:     httpclient.New("tmdb", cfg.Timeout),
 		cache:    c,
 		baseURL:  strings.TrimSuffix(cfg.BaseURL, "/"),
 		apiKey:   cfg.APIKey,

@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"strings"
 
-	"go.uber.org/zap"
-
 	"github.com/arrowwhi/kinolist/internal/domain/movie"
 	"github.com/arrowwhi/kinolist/internal/pkg/errmap"
 	"github.com/arrowwhi/kinolist/internal/pkg/logger"
@@ -23,7 +21,7 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	}
 	if err := json.NewEncoder(w).Encode(body); err != nil {
 		// Заголовки уже ушли — остаётся только зафиксировать факт.
-		zap.L().Warn("encode response failed", zap.Error(err))
+		logger.WarnDetached().Err(err).Msg("encode response failed")
 	}
 }
 
@@ -33,9 +31,9 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	resp := errmap.Map(err)
 
 	if errmap.IsInternal(err) {
-		logger.From(r.Context()).Error("request error", zap.Error(err))
+		logger.Error(r.Context()).Err(err).Msg("request error")
 	} else {
-		logger.From(r.Context()).Debug("request rejected", zap.Error(err))
+		logger.Debug(r.Context()).Err(err).Msg("request rejected")
 	}
 
 	body := dto.Error{Code: resp.Code, Message: resp.Message}

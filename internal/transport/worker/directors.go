@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"go.uber.org/zap"
+	"github.com/arrowwhi/kinolist/internal/pkg/logger"
 )
 
 type directorSyncUseCase interface {
@@ -16,32 +16,31 @@ type directorSyncUseCase interface {
 // работ без ожидания на экране профиля.
 type DirectorSync struct {
 	uc       directorSyncUseCase
-	log      *zap.Logger
 	interval time.Duration
 	batch    int
 }
 
-func NewDirectorSync(uc directorSyncUseCase, log *zap.Logger, interval time.Duration, batch int) *DirectorSync {
+func NewDirectorSync(uc directorSyncUseCase, interval time.Duration, batch int) *DirectorSync {
 	if interval <= 0 {
 		interval = 30 * time.Minute
 	}
 	if batch <= 0 {
 		batch = 20
 	}
-	return &DirectorSync{uc: uc, log: log, interval: interval, batch: batch}
+	return &DirectorSync{uc: uc, interval: interval, batch: batch}
 }
 
 // Run блокируется до отмены контекста. Первый проход — сразу после старта,
 // чтобы после деплоя не ждать полный интервал.
 func (s *DirectorSync) Run(ctx context.Context) error {
-	s.log.Info("director sync started", zap.Duration("interval", s.interval), zap.Int("batch", s.batch))
+	logger.Info(ctx).Dur("interval", s.interval).Int("batch", s.batch).Msg("director sync started")
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
 	for {
 		s.tick(ctx)
 		select {
 		case <-ctx.Done():
-			s.log.Info("director sync stopped")
+			logger.Info(ctx).Msg("director sync stopped")
 			return nil
 		case <-ticker.C:
 		}
@@ -54,10 +53,10 @@ func (s *DirectorSync) tick(ctx context.Context) {
 		return
 	}
 	if err != nil {
-		s.log.Warn("director sync finished with errors", zap.Int("synced", synced), zap.Error(err))
+		logger.Warn(ctx).Int("synced", synced).Err(err).Msg("director sync finished with errors")
 		return
 	}
 	if synced > 0 {
-		s.log.Info("director filmographies synced", zap.Int("synced", synced))
+		logger.Info(ctx).Int("synced", synced).Msg("director filmographies synced")
 	}
 }

@@ -32,6 +32,8 @@ func nameRankSQL(column string) string {
 // Если Кинопоиск опознал того же человека, а в справочнике уже есть
 // строка только с kinopoisk_id, она сливается в TMDB-строку.
 func (r *DirectorRepository) UpsertPerson(ctx context.Context, p movie.Person) (id int64, err error) {
+	ctx = queryName(ctx, "director.upsert_person")
+
 	if p.TMDBID <= 0 || p.Name == "" {
 		return 0, movie.ErrInvalidPersonID
 	}
@@ -76,6 +78,8 @@ func (r *DirectorRepository) UpsertPerson(ctx context.Context, p movie.Person) (
 }
 
 func (r *DirectorRepository) attachKinopoisk(ctx context.Context, id int64, kinopoiskID int32) error {
+	ctx = queryName(ctx, "director.attach_kinopoisk")
+
 	q := r.tx.Querier(ctx)
 	var other int64
 	var otherHasTMDB bool
@@ -115,6 +119,8 @@ func (r *DirectorRepository) attachKinopoisk(ctx context.Context, id int64, kino
 
 // ReplaceWorks заменяет снимок фильмографии и отмечает время синхронизации.
 func (r *DirectorRepository) ReplaceWorks(ctx context.Context, directorID int64, works []movie.DirectorWork) (err error) {
+	ctx = queryName(ctx, "director.replace_works")
+
 	ctx, err = r.tx.BeginTransaction(ctx)
 	if err != nil {
 		return err
@@ -158,6 +164,8 @@ func (r *DirectorRepository) ReplaceWorks(ctx context.Context, directorID int64,
 // TouchSynced отмечает попытку синхронизации, не меняя снимок: человек
 // пропал из каталога, и повторять запрос каждые полчаса незачем.
 func (r *DirectorRepository) TouchSynced(ctx context.Context, directorID int64) error {
+	ctx = queryName(ctx, "director.touch_synced")
+
 	if _, err := r.tx.Querier(ctx).Exec(ctx, `UPDATE directors SET works_synced_at=now() WHERE id=$1`, directorID); err != nil {
 		return fmt.Errorf("mark director synced: %w", err)
 	}
@@ -165,14 +173,20 @@ func (r *DirectorRepository) TouchSynced(ctx context.Context, directorID int64) 
 }
 
 func (r *DirectorRepository) SyncState(ctx context.Context, directorID int64) (movie.DirectorSyncState, error) {
+	ctx = queryName(ctx, "director.sync_state")
+
 	return r.syncState(ctx, `id=$1`, directorID)
 }
 
 func (r *DirectorRepository) SyncStateByTMDB(ctx context.Context, tmdbID int32) (movie.DirectorSyncState, error) {
+	ctx = queryName(ctx, "director.sync_state_by_tmdb")
+
 	return r.syncState(ctx, `tmdb_id=$1`, tmdbID)
 }
 
 func (r *DirectorRepository) syncState(ctx context.Context, where string, arg any) (movie.DirectorSyncState, error) {
+	ctx = queryName(ctx, "director.sync_state")
+
 	var s movie.DirectorSyncState
 	err := r.tx.Querier(ctx).QueryRow(ctx, `SELECT id, coalesce(tmdb_id, 0), name_source, works_synced_at
  FROM directors WHERE `+where, arg).Scan(&s.ID, &s.TMDBID, &s.NameSource, &s.SyncedAt)
@@ -188,6 +202,8 @@ func (r *DirectorRepository) syncState(ctx context.Context, where string, arg an
 // StaleDirectors — режиссёры, которые кому-то нужны (подписка или работа
 // в коллекции), а фильмография не загружена или устарела.
 func (r *DirectorRepository) StaleDirectors(ctx context.Context, olderThan time.Time, limit int) ([]movie.DirectorSyncState, error) {
+	ctx = queryName(ctx, "director.stale_directors")
+
 	rows, err := r.tx.Querier(ctx).Query(ctx, `SELECT d.id, d.tmdb_id, d.name_source, d.works_synced_at FROM directors d
  WHERE d.tmdb_id IS NOT NULL AND (d.works_synced_at IS NULL OR d.works_synced_at < $1)
   AND (EXISTS (SELECT 1 FROM user_directors ud WHERE ud.director_id = d.id)
@@ -204,6 +220,8 @@ func (r *DirectorRepository) StaleDirectors(ctx context.Context, olderThan time.
 }
 
 func (r *DirectorRepository) Follow(ctx context.Context, userID, directorID int64) error {
+	ctx = queryName(ctx, "director.follow")
+
 	_, err := r.tx.Querier(ctx).Exec(ctx, `INSERT INTO user_directors (user_id, director_id) VALUES ($1, $2)
  ON CONFLICT DO NOTHING`, userID, directorID)
 	if hasCode(err, codeForeignKeyViolation) {
@@ -216,6 +234,8 @@ func (r *DirectorRepository) Follow(ctx context.Context, userID, directorID int6
 }
 
 func (r *DirectorRepository) Unfollow(ctx context.Context, userID, directorID int64) error {
+	ctx = queryName(ctx, "director.unfollow")
+
 	if _, err := r.tx.Querier(ctx).Exec(ctx, `DELETE FROM user_directors WHERE user_id=$1 AND director_id=$2`, userID, directorID); err != nil {
 		return fmt.Errorf("unfollow director: %w", err)
 	}
@@ -224,6 +244,8 @@ func (r *DirectorRepository) Unfollow(ctx context.Context, userID, directorID in
 
 // KnownByTMDB сопоставляет людей из поиска с уже заведёнными режиссёрами.
 func (r *DirectorRepository) KnownByTMDB(ctx context.Context, userID int64, tmdbIDs []int32) (map[int32]movie.PersonSearchResult, error) {
+	ctx = queryName(ctx, "director.known_by_tmdb")
+
 	out := make(map[int32]movie.PersonSearchResult, len(tmdbIDs))
 	if len(tmdbIDs) == 0 {
 		return out, nil
@@ -309,6 +331,8 @@ const searchFilterSQL = `filtered AS (SELECT * FROM rows
  WHERE $2 = '' OR strpos(lower(name), lower($2)) > 0 OR strpos(lower(original_name), lower($2)) > 0)`
 
 func (r *DirectorRepository) MyDirectors(ctx context.Context, f movie.MyDirectorsFilter) ([]movie.DirectorOverview, int, movie.DirectorScopeCounts, error) {
+	ctx = queryName(ctx, "director.my_directors")
+
 	f = f.Normalize()
 	var counts movie.DirectorScopeCounts
 	q := r.tx.Querier(ctx)
@@ -356,11 +380,15 @@ func (r *DirectorRepository) MyDirectors(ctx context.Context, f movie.MyDirector
 }
 
 func (r *DirectorRepository) Overview(ctx context.Context, userID, directorID int64) (movie.DirectorOverview, error) {
+	ctx = queryName(ctx, "director.overview")
+
 	profile, err := r.overview(ctx, userID, directorID)
 	return profile.DirectorOverview, err
 }
 
 func (r *DirectorRepository) overview(ctx context.Context, userID, directorID int64) (movie.DirectorProfile, error) {
+	ctx = queryName(ctx, "director.overview")
+
 	var p movie.DirectorProfile
 	row := r.tx.Querier(ctx).QueryRow(ctx, overviewSQL(`SELECT $2::bigint AS director_id`)+
 		` SELECT `+overviewColumns+`, biography, biography_lang FROM rows`, userID, directorID)
@@ -381,6 +409,8 @@ func (r *DirectorRepository) overview(ctx context.Context, userID, directorID in
 
 // Profile — карточка режиссёра с биографией и полной фильмографией.
 func (r *DirectorRepository) Profile(ctx context.Context, userID, directorID int64) (movie.DirectorProfile, error) {
+	ctx = queryName(ctx, "director.profile")
+
 	p, err := r.overview(ctx, userID, directorID)
 	if err != nil {
 		return p, err
@@ -423,6 +453,8 @@ func (r *DirectorRepository) Profile(ctx context.Context, userID, directorID int
 
 // attachKnownFor добавляет три самые высокооценённые работы каждого режиссёра.
 func (r *DirectorRepository) attachKnownFor(ctx context.Context, items []movie.DirectorOverview) error {
+	ctx = queryName(ctx, "director.attach_known_for")
+
 	if len(items) == 0 {
 		return nil
 	}

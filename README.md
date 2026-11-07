@@ -60,7 +60,7 @@ make run                  # сервис на :8080
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 | `SHUTDOWN_TIMEOUT` | `15s` | Предел graceful shutdown |
 | `HTTP_ADDR` | `:8080` | Адрес HTTP-сервера |
-| `METRICS_ADDR` | `:9091` | Внутренний адрес `/metrics`; наружу не публикуется, пусто — выключено |
+| `METRICS_ADDR` | `:9091` | Служебный порт: `/metrics`, `/healthz`, `/ready`; наружу не публикуется, пусто — выключено |
 | `HTTP_READ_TIMEOUT` | `10s` | Таймаут чтения запроса |
 | `HTTP_WRITE_TIMEOUT` | `30s` | Таймаут записи ответа |
 | `HTTP_HANDLER_TIMEOUT` | `25s` | Таймаут обработки одного запроса |
@@ -70,12 +70,14 @@ make run                  # сервис на :8080
 | `POSTGRES_MIN_CONNS` | `2` | Минимум соединений в пуле |
 | `POSTGRES_MAX_CONN_LIFETIME` | `1h` | Время жизни соединения |
 | `POSTGRES_MAX_CONN_IDLE_TIME` | `30m` | Простой до закрытия |
-| `POSTGRES_HEALTH_CHECK_PERIOD` | `1m` | Период проверки пула |
+| `POSTGRES_SLOW_QUERY_THRESHOLD` | `200ms` | Запросы дольше порога пишутся в лог; `0` — выключено |
 | `TELEGRAM_BOT_TOKEN` | — | **Обязательно.** Токен от BotFather |
 | `TELEGRAM_MODE` | `polling` | `polling` или `webhook` |
 | `TELEGRAM_WEBHOOK_PATH` | `/telegram/webhook` | Путь вебхука |
 | `TELEGRAM_WEBHOOK_SECRET` | — | Обязателен при `TELEGRAM_MODE=webhook` |
 | `TELEGRAM_POLL_TIMEOUT` | `30s` | Таймаут long-polling |
+| `TELEGRAM_WORKERS` | `8` | Сколько чатов обрабатывается параллельно (внутри чата — по порядку) |
+| `TELEGRAM_API_URL` | `https://api.telegram.org` | Адрес Bot API (свой telegram-bot-api сервер или заглушка) |
 | `WORKER_CONCURRENCY` | `2` | Число параллельных задач обогащения |
 | `WORKER_POLL_INTERVAL` | `2s` | Как часто воркер смотрит в очередь |
 | `WORKER_JOB_TIMEOUT` | `60s` | Предел на одну задачу |
@@ -98,6 +100,11 @@ make run                  # сервис на :8080
 | `LLM_BASE_URL` | `https://api.anthropic.com` | База API |
 | `LLM_MODEL` | `claude-haiku-4-5-20251001` | Модель для разбора подписи |
 | `LLM_TIMEOUT` | `30s` | Таймаут запроса |
+| `OTEL_ENABLED` | `false` | Экспорт трейсов OpenTelemetry |
+| `OTEL_EXPORTER` | `otlp-grpc` | `otlp-grpc`, `otlp-http` или `stdout` (отладка) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `localhost:4317` | Адрес коллектора (Jaeger, Tempo, OTel Collector) |
+| `OTEL_EXPORTER_OTLP_INSECURE` | `true` | Без TLS до коллектора |
+| `OTEL_SAMPLING_RATE` | `1.0` | Доля трассируемых запросов (0–1) |
 
 Секреты значений по умолчанию не имеют: без них сервис падает на старте со
 списком всех недостающих переменных сразу.
@@ -146,7 +153,24 @@ Caddy сам получит и будет продлевать сертифик�
 БД). Метрики Prometheus (`/metrics`) слушают отдельный внутренний порт
 `METRICS_ADDR` (по умолчанию `:9091`), который прокси не публикует: на
 публичном домене `/metrics` отвечает 404. Снять их можно изнутри контейнера
-или сети Docker, например `wget -qO- localhost:9091/metrics`.
+или сети Docker, например `wget -qO- localhost:9091/metrics`. На том же порту
+`/ready` отдаёт подробный отчёт health-проверок.
+
+## Наблюдаемость
+
+Логи, метрики, трейсы, health-проверки и порядок остановки берутся из
+[github.com/arrowwhi/infrastructure](https://github.com/arrowwhi/infrastructure)
+(`telegram/app`):
+
+- **Логи** — JSON в `prod`, цветной текст локально. В записях запроса или задачи —
+  `request_id`/`job_id`/`telegram_id`, при включённом трейсинге — `trace_id`/`span_id`.
+- **Метрики** (`/metrics` на `METRICS_ADDR`): `http_server_*` (по шаблону маршрута),
+  `db_client_operation_duration_seconds` (по `db_query_name`), `pgxpool_*`,
+  `telegram_bot_*` и `telegram_api_*`, `http_client_*` (TMDB, Кинопоиск, LLM, скрейпер),
+  `kinolist_worker_*`, `health_check_*`, `app_build_info`, рантайм Go.
+- **Трейсы** (`OTEL_ENABLED=true`): спан на HTTP-запрос, обновление бота и задачу
+  воркера; внутри — запросы к БД, вызовы внешних API и Bot API. Секреты из URL
+  (`api_key` TMDB) в трейсы не попадают.
 
 ## Как это работает
 

@@ -17,6 +17,7 @@ import (
 
 	"github.com/arrowwhi/kinolist/internal/config"
 	"github.com/arrowwhi/kinolist/internal/domain/enrichment"
+	"github.com/arrowwhi/kinolist/internal/pkg/httpclient"
 )
 
 const (
@@ -42,7 +43,7 @@ type Extractor struct {
 
 func New(cfg config.LLM) *Extractor {
 	return &Extractor{
-		http:    &http.Client{Timeout: cfg.Timeout},
+		http:    httpclient.New("llm", cfg.Timeout),
 		baseURL: strings.TrimSuffix(cfg.BaseURL, "/"),
 		apiKey:  cfg.APIKey,
 		model:   cfg.Model,

@@ -8,7 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/zap"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/arrowwhi/kinolist/internal/config"
 	"github.com/arrowwhi/kinolist/internal/domain/enrichment"
@@ -30,18 +33,19 @@ type (
 type Worker struct {
 	uc       enrichmentUseCase
 	notifier notifier
-	log      *zap.Logger
 	metrics  *metrics.Metrics
+	tracer   trace.Tracer
 	cfg      config.Worker
 
 	jobs chan enrichment.Job
 	wg   sync.WaitGroup
 }
 
-func New(uc enrichmentUseCase, n notifier, log *zap.Logger, m *metrics.Metrics, cfg config.Worker) *Worker {
+func New(uc enrichmentUseCase, n notifier, m *metrics.Metrics, cfg config.Worker) *Worker {
 	return &Worker{
-		uc: uc, notifier: n, log: log, metrics: m, cfg: cfg,
-		jobs: make(chan enrichment.Job, cfg.Concurrency),
+		uc: uc, notifier: n, metrics: m, cfg: cfg,
+		tracer: otel.Tracer("github.com/arrowwhi/kinolist/internal/transport/worker"),
+		jobs:   make(chan enrichment.Job, cfg.Concurrency),
 	}
 }
 
@@ -53,7 +57,7 @@ func (w *Worker) Run(ctx context.Context) error {
 		go w.consume(ctx)
 	}
 
-	w.log.Info("enrichment worker started", zap.Int("concurrency", w.cfg.Concurrency))
+	logger.Info(ctx).Int("concurrency", w.cfg.Concurrency).Msg("enrichment worker started")
 
 	ticker := time.NewTicker(w.cfg.PollInterval)
 	defer ticker.Stop()
@@ -63,7 +67,7 @@ func (w *Worker) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			close(w.jobs)
 			w.wg.Wait()
-			w.log.Info("enrichment worker stopped")
+			logger.Info(ctx).Msg("enrichment worker stopped")
 			return nil
 		case <-ticker.C:
 			w.poll(ctx)
@@ -82,7 +86,7 @@ func (w *Worker) poll(ctx context.Context) {
 	jobs, err := w.uc.Claim(ctx, limit)
 	if err != nil {
 		if ctx.Err() == nil {
-			w.log.Warn("claim jobs failed", zap.Error(err))
+			logger.Warn(ctx).Err(err).Msg("claim jobs failed")
 		}
 		return
 	}
@@ -105,36 +109,46 @@ func (w *Worker) consume(ctx context.Context) {
 }
 
 func (w *Worker) execute(parent context.Context, job enrichment.Job) {
-	defer func() {
-		if rec := recover(); rec != nil {
-			w.log.Error("panic while processing job",
-				zap.Any("panic", rec), zap.Int64("job_id", job.ID))
-		}
-	}()
-
 	// Задача не отменяется вместе с shutdown: начатую работу нужно
 	// доводить до конца, иначе она останется в processing навсегда.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), w.cfg.JobTimeout)
 	defer cancel()
 
-	ctx = logger.Into(ctx, w.log.With(
-		zap.Int64("job_id", job.ID),
-		zap.Int64("user_id", job.UserID),
-		zap.String("job_kind", string(job.Kind)),
+	ctx = logger.With(ctx, "job_id", job.ID)
+	ctx = logger.With(ctx, "user_id", job.UserID)
+	ctx = logger.With(ctx, "job_kind", string(job.Kind))
+
+	// Отдельный корневой спан на задачу: запросы к БД, TMDB и Telegram внутри
+	// обработки складываются в один трейс.
+	ctx, span := w.tracer.Start(ctx, "worker.enrichment_job", trace.WithAttributes(
+		attribute.Int64("job.id", job.ID),
+		attribute.String("job.kind", string(job.Kind)),
 	))
+	defer span.End()
+
+	defer func() {
+		if rec := recover(); rec != nil {
+			span.SetStatus(codes.Error, "panic")
+			logger.Error(ctx).Interface("panic", rec).Msg("panic while processing job")
+		}
+	}()
 
 	start := time.Now()
-	w.metrics.JobStarted()
-	defer w.metrics.JobFinished()
+	w.metrics.JobStarted(ctx)
+	defer w.metrics.JobFinished(ctx)
 
 	out, err := w.uc.Process(ctx, job)
 	if err != nil {
-		logger.From(ctx).Error("process job failed", zap.Error(err))
-		w.metrics.ObserveJob(string(job.Kind), "error", time.Since(start).Seconds())
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		logger.Error(ctx).Err(err).Msg("process job failed")
+		w.metrics.ObserveJob(ctx, string(job.Kind), "error", time.Since(start).Seconds())
 		return
 	}
 
-	w.metrics.ObserveJob(string(job.Kind), outcomeLabel(out), time.Since(start).Seconds())
+	outcome := outcomeLabel(out)
+	span.SetAttributes(attribute.String("job.outcome", outcome))
+	w.metrics.ObserveJob(ctx, string(job.Kind), outcome, time.Since(start).Seconds())
 
 	// Пустой Outcome означает запланированный повтор — пользователя не трогаем.
 	if out.Job.ID == 0 {
@@ -142,7 +156,7 @@ func (w *Worker) execute(parent context.Context, job enrichment.Job) {
 	}
 
 	if err := w.notifier.NotifyOutcome(ctx, out); err != nil {
-		logger.From(ctx).Warn("notify outcome failed", zap.Error(err))
+		logger.Warn(ctx).Err(err).Msg("notify outcome failed")
 	}
 }
 

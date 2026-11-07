@@ -24,6 +24,8 @@ const jobColumns = `
 	coalesce(chat_id, 0), run_after, created_at, updated_at`
 
 func (r *JobRepository) Create(ctx context.Context, j enrichment.Job) (enrichment.Job, error) {
+	ctx = queryName(ctx, "job.create")
+
 	candidates, err := marshalCandidates(j.Candidates)
 	if err != nil {
 		return enrichment.Job{}, err
@@ -49,6 +51,8 @@ func (r *JobRepository) Create(ctx context.Context, j enrichment.Job) (enrichmen
 }
 
 func (r *JobRepository) Get(ctx context.Context, id int64) (enrichment.Job, error) {
+	ctx = queryName(ctx, "job.get")
+
 	const q = `SELECT ` + jobColumns + ` FROM enrichment_jobs WHERE id = $1`
 
 	out, err := scanJob(r.tx.Querier(ctx).QueryRow(ctx, q, id))
@@ -64,6 +68,8 @@ func (r *JobRepository) Get(ctx context.Context, id int64) (enrichment.Job, erro
 
 // GetForUser не даёт подтвердить чужую задачу по угаданному id.
 func (r *JobRepository) GetForUser(ctx context.Context, userID, id int64) (enrichment.Job, error) {
+	ctx = queryName(ctx, "job.get_for_user")
+
 	const q = `SELECT ` + jobColumns + ` FROM enrichment_jobs WHERE id = $1 AND user_id = $2`
 
 	out, err := scanJob(r.tx.Querier(ctx).QueryRow(ctx, q, id, userID))
@@ -81,6 +87,8 @@ func (r *JobRepository) GetForUser(ctx context.Context, userID, id int64) (enric
 // результат после отмены, воскресил бы задачу. Такой случай возвращает
 // ErrJobNotFound — для вызывающего задачи больше нет.
 func (r *JobRepository) Update(ctx context.Context, j enrichment.Job) error {
+	ctx = queryName(ctx, "job.update")
+
 	candidates, err := marshalCandidates(j.Candidates)
 	if err != nil {
 		return err
@@ -118,6 +126,8 @@ func (r *JobRepository) Update(ctx context.Context, j enrichment.Job) error {
 // воркерам разбирать очередь параллельно, не блокируя друг друга и не
 // выдавая одну задачу дважды.
 func (r *JobRepository) Claim(ctx context.Context, limit int) ([]enrichment.Job, error) {
+	ctx = queryName(ctx, "job.claim")
+
 	if limit <= 0 {
 		return nil, nil
 	}
@@ -161,6 +171,8 @@ func (r *JobRepository) Claim(ctx context.Context, limit int) ([]enrichment.Job,
 }
 
 func (r *JobRepository) GetSession(ctx context.Context, userID int64) (enrichment.Session, error) {
+	ctx = queryName(ctx, "job.get_session")
+
 	const q = `
 		SELECT user_id, state, coalesce(job_id, 0), chat_id, coalesce(message_id, 0), updated_at
 		FROM bot_sessions WHERE user_id = $1`
@@ -179,6 +191,8 @@ func (r *JobRepository) GetSession(ctx context.Context, userID int64) (enrichmen
 }
 
 func (r *JobRepository) SaveSession(ctx context.Context, s enrichment.Session) error {
+	ctx = queryName(ctx, "job.save_session")
+
 	const q = `
 		INSERT INTO bot_sessions (user_id, state, job_id, chat_id, message_id, updated_at)
 		VALUES ($1, $2, nullif($3, 0), $4, nullif($5, 0), now())
@@ -195,6 +209,8 @@ func (r *JobRepository) SaveSession(ctx context.Context, s enrichment.Session) e
 }
 
 func (r *JobRepository) ClearSession(ctx context.Context, userID int64) error {
+	ctx = queryName(ctx, "job.clear_session")
+
 	if _, err := r.tx.Querier(ctx).Exec(ctx, `DELETE FROM bot_sessions WHERE user_id = $1`, userID); err != nil {
 		return fmt.Errorf("clear bot session: %w", err)
 	}
