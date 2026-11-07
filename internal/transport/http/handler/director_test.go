@@ -49,7 +49,7 @@ func directorRouter(stub *directorStub) http.Handler {
 func TestDirectorHTTPIdentityAndContract(t *testing.T) {
 	stub := &directorStub{}
 	r := directorRouter(stub)
-	req := httptest.NewRequest(http.MethodGet, "/directors?q=Denis&media_type=tv&sort=work_count&order=desc&limit=10&offset=5&user_id=999", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/directors?q=Denis&media_type=tv&sort=work_count&order=desc&limit=10&offset=5&user_id=999", nil)
 	req.Header.Set("X-Telegram-Init-Data", statisticsInitData())
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -60,7 +60,7 @@ func TestDirectorHTTPIdentityAndContract(t *testing.T) {
 	if w.Code != 200 || stub.filter.UserID != 7 || stub.filter.MediaType != movie.MediaTV || stub.filter.Query != "Denis" || !stub.filter.Desc || stub.filter.Limit != 10 || stub.filter.Offset != 5 || len(page.Items) != 1 || page.Items[0].AverageUserRating != nil || w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("response: %d %s, filter %+v", w.Code, w.Body.String(), stub.filter)
 	}
-	req = httptest.NewRequest(http.MethodGet, "/directors/17?media_type=movie&user_id=999", nil)
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/directors/17?media_type=movie&user_id=999", nil)
 	req.Header.Set("X-Telegram-Init-Data", statisticsInitData())
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -78,7 +78,7 @@ func TestDirectorHTTPIdentityAndContract(t *testing.T) {
 func TestDirectorHTTPRejectsAnonymousAndInvalidPagination(t *testing.T) {
 	for _, path := range []string{"/directors?limit=bad", "/directors?limit=0", "/directors?offset=-1", "/directors?order=invalid", "/directors/0"} {
 		stub := &directorStub{}
-		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil)
 		req.Header.Set("X-Telegram-Init-Data", statisticsInitData())
 		w := httptest.NewRecorder()
 		directorRouter(stub).ServeHTTP(w, req)
@@ -88,7 +88,7 @@ func TestDirectorHTTPRejectsAnonymousAndInvalidPagination(t *testing.T) {
 	}
 	stub := &directorStub{}
 	w := httptest.NewRecorder()
-	directorRouter(stub).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/directors", nil))
+	directorRouter(stub).ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/directors", nil))
 	if w.Code != 401 || stub.calls != 0 {
 		t.Fatalf("anonymous: %d", w.Code)
 	}
@@ -96,11 +96,11 @@ func TestDirectorHTTPRejectsAnonymousAndInvalidPagination(t *testing.T) {
 
 func TestDirectorIDsFilterParsing(t *testing.T) {
 	for _, raw := range []string{"0", "-1", "1,", "abc", "9223372036854775808"} {
-		if _, err := parseFilter(httptest.NewRequest(http.MethodGet, "/movies?director_ids="+raw, nil), 7); err == nil {
+		if _, err := parseFilter(httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/movies?director_ids="+raw, nil), 7); err == nil {
 			t.Fatalf("accepted %q", raw)
 		}
 	}
-	f, err := parseFilter(httptest.NewRequest(http.MethodGet, "/movies?director_ids=17,25,17&media_type=tv&genre_ids=18", nil), 7)
+	f, err := parseFilter(httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/movies?director_ids=17,25,17&media_type=tv&genre_ids=18", nil), 7)
 	if err != nil || len(f.DirectorIDs) != 2 || f.DirectorIDs[0] != 17 || f.DirectorIDs[1] != 25 || f.MediaType != movie.MediaTV || len(f.GenreIDs) != 1 {
 		t.Fatalf("filter: %+v %v", f, err)
 	}

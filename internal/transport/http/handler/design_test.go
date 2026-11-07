@@ -11,7 +11,7 @@ import (
 
 func TestDuplicateErrorIncludesExistingEntry(t *testing.T) {
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest("POST", "/jobs/1/confirm", nil)
+	r := httptest.NewRequestWithContext(t.Context(), "POST", "/jobs/1/confirm", nil)
 	writeError(w, r, fmt.Errorf("confirm: %w", &movie.AlreadyInCollectionError{UserMovieID: 42}))
 	var body struct {
 		Code       string `json:"code"`
@@ -27,7 +27,7 @@ func TestDuplicateErrorIncludesExistingEntry(t *testing.T) {
 
 func TestNewSortFieldsAccepted(t *testing.T) {
 	for _, sort := range []movie.SortBy{movie.SortByWatchedAt, movie.SortByUserRating} {
-		r := httptest.NewRequest("GET", "/movies?sort="+string(sort)+"&order=asc&genre_ids=1,2", nil)
+		r := httptest.NewRequestWithContext(t.Context(), "GET", "/movies?sort="+string(sort)+"&order=asc&genre_ids=1,2", nil)
 		f, err := parseFilter(r, 7)
 		if err != nil {
 			t.Fatal(err)
@@ -41,12 +41,12 @@ func TestNewSortFieldsAccepted(t *testing.T) {
 
 func TestMediaTypeFilterValidation(t *testing.T) {
 	for _, kind := range []string{"movie", "tv", ""} {
-		f, err := parseFilter(httptest.NewRequest("GET", "/movies?media_type="+kind, nil), 7)
+		f, err := parseFilter(httptest.NewRequestWithContext(t.Context(), "GET", "/movies?media_type="+kind, nil), 7)
 		if err != nil || string(f.MediaType) != kind {
 			t.Fatalf("filter: %+v %v", f, err)
 		}
 	}
-	if _, err := parseFilter(httptest.NewRequest("GET", "/movies?media_type=person", nil), 7); err == nil {
+	if _, err := parseFilter(httptest.NewRequestWithContext(t.Context(), "GET", "/movies?media_type=person", nil), 7); err == nil {
 		t.Fatal("invalid type accepted")
 	}
 }
