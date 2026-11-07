@@ -137,11 +137,6 @@ export function CollectionPage({
               ? 'want_to_watch'
               : status
       }
-      actions={
-        !watched ? (
-          <Button onClick={() => navigate('/add')}>＋ Добавить</Button>
-        ) : undefined
-      }
     >
       <Button variant="secondary" onClick={openFilters}>
         Фильтры и сортировка

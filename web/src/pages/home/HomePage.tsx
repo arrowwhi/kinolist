@@ -23,6 +23,11 @@ export function HomePage({
         </>
       }
       navigate={navigate}
+      floating={
+        <Button className="button--pill" onClick={() => navigate('/add')}>
+          ＋ Добавить
+        </Button>
+      }
     >
       <section className="home-sections" aria-label="Разделы коллекции">
         <h2 className="section-label">Твоя коллекция</h2>
@@ -55,9 +60,6 @@ export function HomePage({
           navigate={navigate}
         />
       </section>
-      <Button onClick={() => navigate('/add')}>
-        ＋ Добавить фильм или сериал
-      </Button>
       <GlobalStatistics revision={revision} />
     </Shell>
   )
