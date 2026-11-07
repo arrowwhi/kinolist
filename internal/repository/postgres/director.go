@@ -38,11 +38,19 @@ func (r *MovieRepository) replaceDirectors(ctx context.Context, movieID int64, d
 		if externalID <= 0 || strings.TrimSpace(d.Name) == "" {
 			return fmt.Errorf("save director: invalid external identity or name")
 		}
+		// Кинопоиск отдаёт русские имена, TMDB в credits — обычно латиницу.
+		source := movie.NameSourceTMDB
+		if column == "kinopoisk_id" {
+			source = movie.NameSourceKinopoisk
+		}
 		// The conflict column comes only from the constants above. Names never merge identities.
-		sql := `INSERT INTO directors (` + column + `,name,original_name) VALUES ($1,$2,$3)
- ON CONFLICT (` + column + `) DO UPDATE SET name=EXCLUDED.name,
+		// Имя из менее надёжного источника не затирает уже найденное русское.
+		better := nameRankSQL("EXCLUDED.name_source") + ` >= ` + nameRankSQL("directors.name_source")
+		sql := `INSERT INTO directors (` + column + `,name,original_name,name_source) VALUES ($1,$2,$3,$4)
+ ON CONFLICT (` + column + `) DO UPDATE SET name=CASE WHEN ` + better + ` THEN EXCLUDED.name ELSE directors.name END,
+ name_source=CASE WHEN ` + better + ` THEN EXCLUDED.name_source ELSE directors.name_source END,
  original_name=coalesce(nullif(EXCLUDED.original_name,''),directors.original_name),updated_at=now() RETURNING id`
-		if err := q.QueryRow(ctx, sql, externalID, d.Name, d.OriginalName).Scan(&id); err != nil {
+		if err := q.QueryRow(ctx, sql, externalID, d.Name, d.OriginalName, source).Scan(&id); err != nil {
 			return fmt.Errorf("upsert director: %w", err)
 		}
 		if _, err := q.Exec(ctx, `INSERT INTO movie_directors(movie_id,director_id,position) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, movieID, id, position); err != nil {

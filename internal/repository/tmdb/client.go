@@ -52,7 +52,7 @@ func (c *Client) Search(ctx context.Context, title string, year int16) ([]movie.
 
 	params := url.Values{
 		"query":         {title},
-		"language":      {c.language},
+		paramLanguage:   {c.language},
 		"include_adult": {"false"},
 	}
 
@@ -83,7 +83,7 @@ func (c *Client) Search(ctx context.Context, title string, year int16) ([]movie.
 }
 
 func (c *Client) Details(ctx context.Context, externalID int32, mediaTypes ...movie.MediaType) (movie.Candidate, error) {
-	params := url.Values{"language": {c.language}}
+	params := url.Values{paramLanguage: {c.language}}
 
 	mediaType := movie.MediaMovie
 	if len(mediaTypes) > 0 {

@@ -23,7 +23,10 @@ export class RequestError extends Error {
     this.existingUserMovieId = existingUserMovieId
   }
 }
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function request<T>(
+  path: string,
+  init: RequestInit = {},
+): Promise<T> {
   let response: Response
   try {
     response = await fetch(`/api/v1${path}`, {

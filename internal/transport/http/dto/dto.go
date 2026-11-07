@@ -155,3 +155,92 @@ type DirectorList struct {
 	Limit  int             `json:"limit"`
 	Offset int             `json:"offset"`
 }
+
+// DirectorOverview — карточка в разделе «Мои режиссёры».
+// filmography_complete=false: фильмография из каталога ещё не загружена,
+// work_count пока считает только работы из коллекции.
+type DirectorOverview struct {
+	Director
+	ID                  int64    `json:"id"`
+	PhotoURL            string   `json:"photo_url,omitempty"`
+	BirthDate           string   `json:"birth_date,omitempty"`
+	DeathDate           string   `json:"death_date,omitempty"`
+	PlaceOfBirth        string   `json:"place_of_birth,omitempty"`
+	KnownFor            []string `json:"known_for"`
+	Followed            bool     `json:"followed"`
+	FilmographyComplete bool     `json:"filmography_complete"`
+	WorkCount           int      `json:"work_count"`
+	InCollectionCount   int      `json:"in_collection_count"`
+	WatchedCount        int      `json:"watched_count"`
+	WantToWatchCount    int      `json:"want_to_watch_count"`
+	RatedCount          int      `json:"rated_count"`
+	AverageUserRating   *float64 `json:"average_user_rating"`
+}
+
+type DirectorScopeCounts struct {
+	All        int `json:"all"`
+	Followed   int `json:"followed"`
+	Collection int `json:"collection"`
+}
+
+type DirectorOverviewList struct {
+	Items  []DirectorOverview  `json:"items"`
+	Total  int                 `json:"total"`
+	Limit  int                 `json:"limit"`
+	Offset int                 `json:"offset"`
+	Counts DirectorScopeCounts `json:"counts"`
+}
+
+type FilmographyItem struct {
+	TMDBID        int32    `json:"tmdb_id,omitempty"`
+	MovieID       int64    `json:"movie_id,omitempty"`
+	MediaType     string   `json:"media_type"`
+	Title         string   `json:"title"`
+	OriginalTitle string   `json:"original_title"`
+	Year          int16    `json:"year,omitempty"`
+	ReleaseDate   string   `json:"release_date,omitempty"`
+	PosterURL     string   `json:"poster_url,omitempty"`
+	Rating        *float64 `json:"rating"`
+	VoteCount     int32    `json:"vote_count"`
+	EpisodeCount  *int32   `json:"episode_count,omitempty"`
+	Upcoming      bool     `json:"upcoming"`
+	UserMovieID   int64    `json:"user_movie_id,omitempty"`
+	Status        string   `json:"status,omitempty"`
+	UserRating    int16    `json:"user_rating,omitempty"`
+}
+
+type DirectorProfile struct {
+	DirectorOverview
+	Biography     string            `json:"biography"`
+	BiographyLang string            `json:"biography_lang,omitempty"`
+	Stale         bool              `json:"stale"`
+	Filmography   []FilmographyItem `json:"filmography"`
+}
+
+// PersonSearchResult: id есть, только если человек уже заведён как режиссёр.
+type PersonSearchResult struct {
+	ID                 *int64   `json:"id"`
+	TMDBID             int32    `json:"tmdb_id"`
+	Name               string   `json:"name"`
+	OriginalName       string   `json:"original_name"`
+	PhotoURL           string   `json:"photo_url,omitempty"`
+	KnownForDepartment string   `json:"known_for_department,omitempty"`
+	KnownFor           []string `json:"known_for"`
+	Followed           bool     `json:"followed"`
+}
+
+type PersonSearchList struct {
+	Items []PersonSearchResult `json:"items"`
+}
+
+type TMDBPersonRequest struct {
+	TMDBID int32 `json:"tmdb_id"`
+}
+
+// AddMovieRequest — быстрое добавление работы из фильмографии.
+type AddMovieRequest struct {
+	Provider   string `json:"provider"`
+	ExternalID int32  `json:"external_id"`
+	MediaType  string `json:"media_type"`
+	Status     string `json:"status,omitempty"`
+}

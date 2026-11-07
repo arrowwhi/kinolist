@@ -20,20 +20,14 @@ func (h *Movie) ListDirectors(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	f := movie.DirectorFilter{UserID: userID, MediaType: movie.MediaType(q.Get("media_type")), Query: q.Get("q"), Sort: q.Get("sort"), Desc: q.Get("order") == "desc"}
-	if order := q.Get("order"); order != "" && order != "asc" && order != "desc" {
+	f := movie.DirectorFilter{UserID: userID, MediaType: movie.MediaType(q.Get("media_type")), Query: q.Get("q"), Sort: q.Get("sort"), Desc: q.Get("order") == orderDesc}
+	if order := q.Get("order"); order != "" && order != orderAsc && order != orderDesc {
 		writeError(w, r, errmap.ErrBadRequest)
 		return
 	}
-	for key, target := range map[string]*int{"limit": &f.Limit, "offset": &f.Offset} {
-		if raw := q.Get(key); raw != "" {
-			value, err := strconv.Atoi(raw)
-			if err != nil || value < 0 || (key == "limit" && value == 0) {
-				writeError(w, r, errmap.ErrBadRequest)
-				return
-			}
-			*target = value
-		}
+	if err := parsePaging(q, &f.Limit, &f.Offset); err != nil {
+		writeError(w, r, err)
+		return
 	}
 	page, err := h.uc.ListDirectors(r.Context(), f)
 	if err != nil {

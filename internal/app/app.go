@@ -29,6 +29,7 @@ import (
 	"github.com/arrowwhi/kinolist/internal/transport/telegram"
 	"github.com/arrowwhi/kinolist/internal/transport/worker"
 	collectionuc "github.com/arrowwhi/kinolist/internal/usecase/collection"
+	directorsuc "github.com/arrowwhi/kinolist/internal/usecase/directors"
 	enrichmentuc "github.com/arrowwhi/kinolist/internal/usecase/enrichment"
 	"github.com/arrowwhi/kinolist/pkg/transactions"
 	"github.com/arrowwhi/kinolist/web"
@@ -106,8 +107,14 @@ func Run(ctx context.Context, envFile string) error {
 		Primary: primaryCatalog, Tx: txManager,
 		MaxAttempts: cfg.Worker.MaxAttempts, RetryDelay: 30 * time.Second,
 	}
+	directorDeps := directorsuc.Deps{
+		Directors: postgres.NewDirectorRepository(txManager), Catalog: primaryCatalog, Tx: txManager,
+		WorksTTL: cfg.Directors.WorksTTL,
+	}
 	if cfg.Kinopoisk.Enabled() {
-		enrichDeps.Fallback = kinopoisk.New(cfg.Kinopoisk)
+		kinopoiskClient := kinopoisk.New(cfg.Kinopoisk)
+		enrichDeps.Fallback = kinopoiskClient
+		directorDeps.Names = kinopoiskClient
 	} else {
 		log.Warn("kinopoisk fallback is disabled: KINOPOISK_API_KEY is not set")
 	}
@@ -121,6 +128,7 @@ func Run(ctx context.Context, envFile string) error {
 	// --- usecase ---
 	collectionUC := collectionuc.New(movies, users)
 	enrichmentUC := enrichmentuc.New(enrichDeps)
+	directorsUC := directorsuc.New(directorDeps)
 
 	// --- транспорт ---
 	botAPI := telegram.NewAPI(cfg.Telegram.BotToken, cfg.Telegram.PollTimeout)
@@ -139,6 +147,7 @@ func Run(ctx context.Context, envFile string) error {
 		Config: cfg, Log: log, Metrics: m,
 		Movies:      handler.NewMovie(collectionUC),
 		Jobs:        handler.NewEnrichment(enrichmentUC),
+		Directors:   handler.NewDirectors(directorsUC),
 		Health:      health,
 		WebAssets:   assets,
 		ResolveUser: resolveUserFunc(collectionUC),
@@ -149,6 +158,7 @@ func Run(ctx context.Context, envFile string) error {
 
 	server := transporthttp.NewServer(cfg.HTTP, transporthttp.NewRouter(routerDeps))
 	enrichmentWorker := worker.New(enrichmentUC, notifier, log, m, cfg.Worker)
+	directorSync := worker.NewDirectorSync(directorsUC, log, cfg.Directors.SyncInterval, cfg.Directors.SyncBatch)
 
 	if err := bot.Setup(ctx); err != nil {
 		// Меню и команды — украшение; без них бот полностью работоспособен.
@@ -168,6 +178,10 @@ func Run(ctx context.Context, envFile string) error {
 
 	group.Go(func() error {
 		return enrichmentWorker.Run(groupCtx)
+	})
+
+	group.Go(func() error {
+		return directorSync.Run(groupCtx)
 	})
 
 	if cfg.Telegram.IsWebhook() {

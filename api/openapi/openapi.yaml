@@ -105,6 +105,156 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /my-directors:
+    get:
+      summary: Мои режиссёры — отслеживаемые и из коллекции
+      description: |
+        В выборку попадают режиссёры, на которых подписан пользователь, и
+        режиссёры работ из его коллекции. Счётчики объединяют фильмографию из
+        каталога (TMDB) с работами коллекции, которых в каталоге нет.
+        Пока фильмография не загружена, filmography_complete=false и
+        work_count считает только работы коллекции. counts учитывают query,
+        но не scope.
+      parameters:
+        - name: scope
+          in: query
+          schema: { type: string, enum: [all, followed, collection], default: all }
+          description: collection — режиссёры из коллекции без подписки
+        - name: query
+          in: query
+          description: Поиск по русскому и оригинальному имени
+          schema: { type: string }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [name, progress, user_rating], default: name }
+        - name: order
+          in: query
+          description: По умолчанию asc для name и desc для остальных
+          schema: { type: string, enum: [asc, desc] }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DirectorOverviewList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /people/search:
+    get:
+      summary: Поиск людей в каталоге TMDB
+      description: |
+        Режиссёры идут первыми, остальные не отбрасываются. id заполнен, только
+        если человек уже заведён в справочнике. Пустой query возвращает
+        подсказки — режиссёров из коллекции без подписки (без запроса в TMDB).
+        Ничего не записывает в базу.
+      parameters:
+        - name: query
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: До 20 человек
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/PersonSearchResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+
+  /directors/import:
+    post:
+      summary: Завести человека из TMDB как режиссёра
+      description: |
+        Идемпотентно: загружает профиль и фильмографию, уточняет русское имя
+        через Кинопоиск. Нужен, чтобы открыть профиль человека из поиска.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TMDBPersonRequest' }
+      responses:
+        '200':
+          description: Режиссёр с внутренним id
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DirectorOverview' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+
+  /directors/follow-by-tmdb:
+    post:
+      summary: Завести человека из TMDB и подписаться на него
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TMDBPersonRequest' }
+      responses:
+        '200':
+          description: Режиссёр, followed=true
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DirectorOverview' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+
+  /directors/{id}/profile:
+    get:
+      summary: Профиль режиссёра и полная фильмография
+      description: |
+        Если снимок фильмографии старше DIRECTOR_WORKS_TTL, он обновляется в
+        рамках запроса (до 5 секунд). Если каталог не ответил — отдаётся
+        сохранённый снимок со stale=true. Фильмография отсортирована от новых
+        работ к старым; фильтры и другие сортировки делает клиент.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DirectorProfile' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /directors/{id}/follow:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64, minimum: 1 }
+    put:
+      summary: Подписаться на режиссёра (идемпотентно)
+      responses:
+        '204': { description: Подписка есть }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      summary: Отписаться от режиссёра
+      description: Режиссёр с работами в коллекции остаётся в scope=collection.
+      responses:
+        '204': { description: Подписки нет }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
   /genres:
     get:
       summary: Справочник жанров или сводка коллекции
@@ -177,6 +327,38 @@ paths:
               schema: { $ref: '#/components/schemas/MovieList' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      summary: Добавить работу в коллекцию по внешнему id
+      description: |
+        Быстрое добавление из фильмографии режиссёра, без поиска и задачи.
+        Статус по умолчанию want_to_watch. Дубль — 409 с existing_user_movie_id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, external_id, media_type]
+              properties:
+                provider: { type: string, enum: [tmdb, kinopoisk] }
+                external_id: { type: integer, format: int32, minimum: 1 }
+                media_type: { type: string, enum: [movie, tv] }
+                status: { $ref: '#/components/schemas/Status' }
+      responses:
+        '201':
+          description: Добавлено
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserMovie' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Уже в коллекции
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '502': { $ref: '#/components/responses/BadGateway' }
 
   /movies/{id}:
     parameters:
@@ -337,6 +519,11 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
+    BadGateway:
+      description: Внешний каталог недоступен
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
 
   parameters:
     DirectorIDs:
@@ -349,6 +536,103 @@ components:
       schema: { type: string, example: "17,25" }
 
   schemas:
+    DirectorOverview:
+      type: object
+      required: [id, name, original_name, known_for, followed, filmography_complete, work_count, in_collection_count, watched_count, want_to_watch_count, rated_count, average_user_rating]
+      properties:
+        id: { type: integer, format: int64 }
+        tmdb_id: { type: integer, format: int32 }
+        kinopoisk_id: { type: integer, format: int32 }
+        name: { type: string, description: Русское имя, если удалось найти }
+        original_name: { type: string }
+        photo_url: { type: string, format: uri }
+        birth_date: { type: string, format: date }
+        death_date: { type: string, format: date }
+        place_of_birth: { type: string }
+        known_for:
+          type: array
+          description: До трёх самых высокооценённых работ
+          items: { type: string }
+        followed: { type: boolean }
+        filmography_complete:
+          type: boolean
+          description: false — фильмография из каталога ещё не загружена
+        work_count: { type: integer }
+        in_collection_count: { type: integer }
+        watched_count: { type: integer }
+        want_to_watch_count: { type: integer }
+        rated_count: { type: integer }
+        average_user_rating: { type: number, nullable: true }
+    DirectorOverviewList:
+      type: object
+      required: [items, total, limit, offset, counts]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/DirectorOverview' }
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+        counts:
+          type: object
+          required: [all, followed, collection]
+          properties:
+            all: { type: integer }
+            followed: { type: integer }
+            collection: { type: integer }
+    FilmographyItem:
+      type: object
+      required: [media_type, title, original_title, rating, vote_count, upcoming]
+      properties:
+        tmdb_id: { type: integer, format: int32, description: Нет у работ только из Кинопоиска }
+        movie_id: { type: integer, format: int64 }
+        media_type: { type: string, enum: [movie, tv] }
+        title: { type: string }
+        original_title: { type: string }
+        year: { type: integer }
+        release_date: { type: string, format: date }
+        poster_url: { type: string, format: uri }
+        rating:
+          type: number
+          nullable: true
+          description: Рейтинг TMDB; null при менее чем 20 голосах
+        vote_count: { type: integer }
+        episode_count: { type: integer, description: Эпизоды, снятые режиссёром }
+        upcoming: { type: boolean }
+        user_movie_id: { type: integer, format: int64 }
+        status: { $ref: '#/components/schemas/Status' }
+        user_rating: { type: integer, minimum: 1, maximum: 10 }
+    DirectorProfile:
+      allOf:
+        - $ref: '#/components/schemas/DirectorOverview'
+        - type: object
+          required: [biography, stale, filmography]
+          properties:
+            biography: { type: string }
+            biography_lang: { type: string, enum: [ru, en] }
+            stale: { type: boolean }
+            filmography:
+              type: array
+              items: { $ref: '#/components/schemas/FilmographyItem' }
+    PersonSearchResult:
+      type: object
+      required: [id, tmdb_id, name, original_name, known_for, followed]
+      properties:
+        id: { type: integer, format: int64, nullable: true }
+        tmdb_id: { type: integer, format: int32 }
+        name: { type: string }
+        original_name: { type: string }
+        photo_url: { type: string, format: uri }
+        known_for_department: { type: string }
+        known_for:
+          type: array
+          items: { type: string }
+        followed: { type: boolean }
+    TMDBPersonRequest:
+      type: object
+      required: [tmdb_id]
+      properties:
+        tmdb_id: { type: integer, format: int32, minimum: 1 }
     Director:
       type: object
       required: [name, original_name]
