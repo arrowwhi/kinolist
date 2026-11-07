@@ -55,9 +55,9 @@ export function HomePage({
         />
         <SectionLink
           title="Режиссёры"
-          description="Авторы историй в твоей коллекции."
-          action="Выбрать режиссёра"
-          to="/directors"
+          description="Любимые авторы и их фильмография целиком."
+          action="Открыть режиссёров"
+          to="/v2/directors"
           navigate={navigate}
         />
       </section>

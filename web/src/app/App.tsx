@@ -77,7 +77,7 @@ export function App() {
         onChange={setMyDirectors}
         revision={revision}
         navigate={navigate}
-        back={() => navigate('/v2', true)}
+        back={goHome}
       />
     )
   else if (path === '/v2/directors/add')
