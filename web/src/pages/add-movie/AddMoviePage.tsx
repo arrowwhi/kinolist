@@ -3,6 +3,7 @@ import type { Candidate, UserMovie } from '../../api/types'
 import type { Navigate } from '../../shared/lib/navigation'
 import type { RecentCandidate } from '../../features/add-movie/useRecentCandidates'
 import { Shell } from '../../widgets/app-shell/Shell'
+import { readClipboard } from '../../shared/lib/telegram'
 import { useAddMovie } from '../../features/add-movie/useAddMovie'
 import { RatingForm } from '../../features/rating/RatingForm'
 import { Button } from '../../shared/ui/Button'
@@ -82,7 +83,7 @@ export function AddMoviePage({
   }
   async function paste() {
     try {
-      flow.setInput(await navigator.clipboard.readText())
+      flow.setInput(await readClipboard())
     } catch {
       flow.setError(
         'Не удалось прочитать буфер. Введи название в поле вручную.',

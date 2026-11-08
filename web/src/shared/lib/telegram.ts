@@ -28,6 +28,29 @@ export function haptic(type: 'select' | 'success' | 'error' | 'light') {
     else feedback.notificationOccurred(type)
   })
 }
+// Кнопка «Вставить». Внутри Telegram буфер читает сам клиент: текст
+// приходит сразу, без второго системного пузыря «Вставить», который
+// WebView показывает на navigator.clipboard.readText(). Вне Telegram
+// и на старых клиентах — обычный Clipboard API.
+export async function readClipboard(): Promise<string> {
+  const app = webApp()
+  if (
+    insideTelegram() &&
+    app?.readTextFromClipboard &&
+    app.isVersionAtLeast?.('6.4')
+  ) {
+    try {
+      // Вызов должен случиться синхронно в обработчике клика — до любых await.
+      const text = await new Promise<string | null>((resolve) =>
+        app.readTextFromClipboard!(resolve),
+      )
+      if (text != null) return text
+    } catch {
+      // Клиент отказал — пробуем Clipboard API ниже.
+    }
+  }
+  return navigator.clipboard.readText()
+}
 export function useTelegramSetup() {
   useEffect(() => {
     call('6.0', (app) => {

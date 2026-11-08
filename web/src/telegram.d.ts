@@ -41,6 +41,7 @@ interface TelegramWebApp {
   setHeaderColor?(color: string): void
   setBackgroundColor?(color: string): void
   showConfirm?(message: string, callback: (ok: boolean) => void): void
+  readTextFromClipboard?(callback: (text: string | null) => void): void
 }
 
 interface Window {
