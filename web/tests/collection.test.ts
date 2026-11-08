@@ -5,7 +5,11 @@ import {
   groupMovies,
 } from '../src/features/collection/model.ts'
 import { contentCount } from '../src/entities/movie/metadata.ts'
-import { formatRuntime, safeExternalUrl } from '../src/shared/lib/format.ts'
+import {
+  formatRuntime,
+  safeExternalUrl,
+  shortUrl,
+} from '../src/shared/lib/format.ts'
 import type { UserMovie } from '../src/api/types.ts'
 const item = (id: number, added: string, watched?: string): UserMovie => ({
   id,
@@ -94,4 +98,11 @@ test('external source links reject executable URL schemes', () => {
     safeExternalUrl('https://www.instagram.com/reel/example/'),
     'https://www.instagram.com/reel/example/',
   )
+})
+test('source links are shown without scheme, www and trailing slash', () => {
+  assert.equal(
+    shortUrl('https://www.instagram.com/reel/C8xQp2LsK1a/'),
+    'instagram.com/reel/C8xQp2LsK1a',
+  )
+  assert.equal(shortUrl('http://instagr.am/p/abc'), 'instagr.am/p/abc')
 })

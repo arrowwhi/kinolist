@@ -129,13 +129,11 @@ func (uc *UseCase) Enqueue(ctx context.Context, userID, chatID int64, input stri
 
 	switch kind {
 	case enrichment.KindReel:
+		// Без скрейпера подпись не достать — отказываем сразу, пока
+		// пользователь ещё ждёт ответа. LLM не обязательна: явно выделенные
+		// названия разбираются правилами.
 		if !uc.fetcher.Enabled() {
 			return enrichment.Job{}, enrichment.ErrFetcherDisabled
-		}
-		// Без экстрактора рилс всё равно упадёт в воркере — отказываем сразу,
-		// пока пользователь ещё ждёт ответа.
-		if !uc.extractor.Enabled() {
-			return enrichment.Job{}, enrichment.ErrExtractorDisabled
 		}
 		job.SourceURL = value
 	case enrichment.KindTitle:
@@ -201,29 +199,7 @@ func (uc *UseCase) Process(ctx context.Context, job enrichment.Job) (enrichment.
 // resolve доводит задачу от исходного ввода до списка кандидатов.
 func (uc *UseCase) resolve(ctx context.Context, job *enrichment.Job) (movie.Match, error) {
 	if job.Kind == enrichment.KindReel && job.QueryTitle == "" {
-		if !uc.fetcher.Enabled() {
-			return movie.Match{}, enrichment.ErrFetcherDisabled
-		}
-		if !uc.extractor.Enabled() {
-			return movie.Match{}, enrichment.ErrExtractorDisabled
-		}
-
-		content, err := uc.fetcher.Fetch(ctx, job.SourceURL)
-		if err != nil {
-			return movie.Match{}, fmt.Errorf("fetch reel: %w", err)
-		}
-
-		extracted, err := uc.extractor.Extract(ctx, content)
-		if err != nil {
-			return movie.Match{}, fmt.Errorf("extract title: %w", err)
-		}
-		if !extracted.Recognized() {
-			return movie.Match{}, enrichment.ErrTitleNotRecognized
-		}
-
-		job.RawTitle = content.Caption
-		job.QueryTitle = extracted.Title
-		job.QueryYear = extracted.Year
+		return uc.resolveReel(ctx, job)
 	}
 
 	if job.QueryTitle == "" {
@@ -236,6 +212,72 @@ func (uc *UseCase) resolve(ctx context.Context, job *enrichment.Job) (movie.Matc
 	}
 
 	return movie.SelectMatch(job.QueryTitle, job.QueryYear, candidates), nil
+}
+
+// resolveReel достаёт название из подписи к рилсу. Сначала пробует
+// названия, выделенные явно (кавычки, «фильм:», год в скобках), и берёт
+// первое, которое нашлось в каталоге. Только если ни одно не подошло,
+// спрашивает LLM — она дороже и медленнее, а может быть и не настроена.
+func (uc *UseCase) resolveReel(ctx context.Context, job *enrichment.Job) (movie.Match, error) {
+	if !uc.fetcher.Enabled() {
+		return movie.Match{}, enrichment.ErrFetcherDisabled
+	}
+
+	content, err := uc.fetcher.Fetch(ctx, job.SourceURL)
+	if err != nil {
+		return movie.Match{}, fmt.Errorf("fetch reel: %w", err)
+	}
+	job.RawTitle = content.Caption
+
+	guesses := enrichment.CaptionTitles(content.Caption)
+	tried := make(map[string]struct{}, len(guesses))
+	for _, g := range guesses {
+		tried[movie.NormalizeTitle(g.Title)] = struct{}{}
+
+		candidates, err := uc.search(ctx, g.Title, g.Year)
+		if err != nil {
+			return movie.Match{}, err
+		}
+		if len(candidates) > 0 {
+			job.QueryTitle = g.Title
+			job.QueryYear = g.Year
+			return movie.SelectMatch(g.Title, g.Year, candidates), nil
+		}
+	}
+
+	if !uc.extractor.Enabled() {
+		if len(guesses) == 0 {
+			return movie.Match{}, enrichment.ErrTitleNotRecognized
+		}
+		// Название в подписи было, но каталог его не знает — это «не нашлось»,
+		// а не «не распознано».
+		job.QueryTitle = guesses[0].Title
+		job.QueryYear = guesses[0].Year
+		return movie.Match{Kind: movie.MatchNone}, nil
+	}
+
+	extracted, err := uc.extractor.Extract(ctx, content)
+	if err != nil {
+		return movie.Match{}, fmt.Errorf("extract title: %w", err)
+	}
+	if !extracted.Recognized() {
+		return movie.Match{}, enrichment.ErrTitleNotRecognized
+	}
+
+	job.QueryTitle = extracted.Title
+	job.QueryYear = extracted.Year
+
+	// LLM вернула то же, что уже искали по правилам: повторный запрос
+	// в каталог ничего нового не даст.
+	if _, ok := tried[movie.NormalizeTitle(extracted.Title)]; ok {
+		return movie.Match{Kind: movie.MatchNone}, nil
+	}
+
+	candidates, err := uc.search(ctx, extracted.Title, extracted.Year)
+	if err != nil {
+		return movie.Match{}, err
+	}
+	return movie.SelectMatch(extracted.Title, extracted.Year, candidates), nil
 }
 
 // search идёт в основной каталог, а при пустом результате — в запасной.

@@ -104,6 +104,8 @@ export interface Job {
   source_url?: string
   candidates: Candidate[]
   error?: string
+  /** Причина неудачи при status=failed: title_not_recognized, no_candidates, reel_unavailable… */
+  error_code?: string
 }
 
 export interface GenreStats extends Genre {

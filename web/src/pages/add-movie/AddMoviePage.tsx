@@ -11,6 +11,13 @@ import { EmptyState, InlineError, SkeletonList } from '../../shared/ui/Feedback'
 import { MoviePreview } from '../../entities/movie/MoviePreview'
 import { CandidateCard } from '../../entities/movie/CandidateCard'
 import { candidateKey, movieMetadata } from '../../entities/movie/metadata'
+import { ReelIcon } from '../../entities/movie/ReelIcon'
+import {
+  CaptionPatterns,
+  ReelHint,
+  ReelLink,
+  ReelSource,
+} from '../../features/add-movie/ReelHint'
 export function AddMoviePage({
   navigate,
   back,
@@ -63,6 +70,13 @@ export function AddMoviePage({
   }, [flow.movie, remember])
   const waiting =
     !!flow.job && ['pending', 'processing'].includes(flow.job.status)
+  const reel = flow.job?.kind === 'reel'
+  // Запрос, который сервер достал из описания рилса или взял из поля ввода.
+  const query = flow.job?.query_title || flow.input
+  const querySource =
+    reel && flow.job?.query_title ? (
+      <ReelSource title={flow.job.query_title} year={flow.job.query_year} />
+    ) : null
   const tv = (flow.movie?.media_type ?? flow.candidate?.media_type) === 'tv'
   async function goBack() {
     if (flow.busy) return
@@ -79,6 +93,13 @@ export function AddMoviePage({
       return
     }
     back()
+  }
+  // Из рилса название не достали — возвращаем к форме с тем, что удалось
+  // понять (или с пустым полем), и сразу ставим курсор.
+  async function enterTitle(prefill: string) {
+    await flow.reset()
+    flow.setInput(prefill)
+    requestAnimationFrame(() => document.getElementById(queryId)?.focus())
   }
   async function paste() {
     try {
@@ -132,7 +153,7 @@ export function AddMoviePage({
             </p>
             <div className="field-label">
               <label className="add-form__label" htmlFor={queryId}>
-                Название фильма или сериала
+                Название или ссылка
               </label>
               <div className="add-form__row">
                 <Field
@@ -164,12 +185,13 @@ export function AddMoviePage({
               Найти
             </Button>
           </form>
+          {!candidates.length && <ReelHint />}
           {candidates.length ? (
             <section className="stack" aria-label="Результаты поиска">
               <h2>Результаты поиска</h2>
-              <p className="muted small">
-                По запросу «{flow.job?.query_title || flow.input}»
-              </p>
+              {querySource ?? (
+                <p className="muted small">По запросу «{query}»</p>
+              )}
               {candidates.map((c) => (
                 <CandidateCard
                   key={candidateKey(c)}
@@ -197,9 +219,7 @@ export function AddMoviePage({
         </>
       ) : flow.candidate ? (
         <>
-          <p className="muted">
-            По запросу «{flow.job.query_title || flow.input}»
-          </p>
+          {querySource ?? <p className="muted">По запросу «{query}»</p>}
           {flow.busy && !flow.movie ? (
             <SkeletonList />
           ) : flow.movie ? (
@@ -244,8 +264,21 @@ export function AddMoviePage({
         <div className="stack">
           <div className="search-progress">
             <span className="spinner spinner--large" />
-            <h2>Ищем фильмы и сериалы</h2>
-            <p className="muted">Обычно это занимает несколько секунд.</p>
+            {reel ? (
+              <>
+                <h2>Читаем описание рилса</h2>
+                <p className="muted search-progress__text">
+                  Ищем название в кавычках, после «фильм:» или рядом с годом.
+                  Пара секунд.
+                </p>
+                {flow.job?.source_url && <ReelLink url={flow.job.source_url} />}
+              </>
+            ) : (
+              <>
+                <h2>Ищем фильмы и сериалы</h2>
+                <p className="muted">Обычно это занимает несколько секунд.</p>
+              </>
+            )}
           </div>
           <InlineError message={flow.error} />
           {flow.pollStopped && (
@@ -259,6 +292,12 @@ export function AddMoviePage({
             Отменить поиск
           </Button>
         </div>
+      ) : reel ? (
+        <ReelFailure
+          code={flow.job?.error_code}
+          title={flow.job?.query_title}
+          onEnterTitle={() => void enterTitle(flow.job?.query_title ?? '')}
+        />
       ) : (
         <EmptyState
           title="Ничего не найдено"
@@ -270,5 +309,52 @@ export function AddMoviePage({
         />
       )}
     </Shell>
+  )
+}
+
+// Рилс не превратился в кандидатов. Причины разные, а выход один —
+// ввести название вручную, поэтому кнопка всегда ведёт к форме.
+function ReelFailure({
+  code,
+  title,
+  onEnterTitle,
+}: {
+  code?: string
+  title?: string
+  onEnterTitle: () => void
+}) {
+  const notInCatalog = code === 'no_candidates' && !!title
+  const notRecognized = code === 'title_not_recognized'
+  return (
+    <div className="stack reel-failure">
+      <div className="reel-failure__head">
+        <ReelIcon size="lg" />
+        <h2>
+          {notInCatalog
+            ? `Не нашли «${title}» в кинобазе`
+            : notRecognized
+              ? 'Не нашли название в описании'
+              : 'Не получилось открыть рилс'}
+        </h2>
+        <p className="muted">
+          {notInCatalog
+            ? 'Название взяли из описания рилса. Уточни его или добавь год.'
+            : notRecognized
+              ? 'Автор рилса не написал название явно. Введи его сам — займёт пару секунд.'
+              : 'Instagram не отдал описание. Попробуй позже или введи название сам.'}
+        </p>
+      </div>
+      {!notInCatalog && (
+        <div className="reel-failure__tip">
+          <p className="muted small">
+            Узнаём автоматически, если в описании есть
+          </p>
+          <CaptionPatterns />
+        </div>
+      )}
+      <Button onClick={onEnterTitle}>
+        {notInCatalog ? 'Уточнить название' : 'Ввести название'}
+      </Button>
+    </div>
   )
 }

@@ -20,6 +20,20 @@ function call(minVersion: string, action: (app: TelegramWebApp) => void) {
     // Косметика SDK не стоит падения интерфейса.
   }
 }
+// Внешние ссылки внутри Telegram открываем через SDK: обычный target=_blank
+// в WebView мини-приложения на части клиентов не срабатывает, а openLink
+// отдаёт ссылку системе — Instagram откроется в приложении или браузере.
+// Возвращает false, если SDK недоступен и переход остаётся браузеру.
+export function openExternalLink(url: string): boolean {
+  const app = webApp()
+  if (!insideTelegram() || !app?.openLink) return false
+  try {
+    app.openLink(url)
+    return true
+  } catch {
+    return false
+  }
+}
 export function haptic(type: 'select' | 'success' | 'error' | 'light') {
   call('6.1', (app) => {
     const feedback = app.HapticFeedback

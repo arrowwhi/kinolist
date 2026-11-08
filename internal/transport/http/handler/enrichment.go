@@ -79,7 +79,9 @@ func (h *Enrichment) Get(w http.ResponseWriter, r *http.Request) {
 
 	out := converter.Job(job)
 	if job.Status == enrichment.StatusFailed {
-		out.Error = errmap.Map(errFromJob(job)).Message
+		resp := errmap.Map(errFromJob(job))
+		out.Error = resp.Message
+		out.ErrorCode = resp.Code
 	}
 
 	writeJSON(w, http.StatusOK, out)

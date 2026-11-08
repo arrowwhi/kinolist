@@ -821,6 +821,13 @@ components:
         error:
           type: string
           description: Заполняется только при status=failed
+        error_code:
+          type: string
+          description: |
+            Машинный код причины при status=failed (тот же, что в ErrorResponse.code):
+            title_not_recognized — в описании рилса не нашлось названия;
+            no_candidates — название есть (query_title), но каталог его не знает;
+            reel_unavailable — не удалось получить описание рилса.
 
     ConfirmJobRequest:
       type: object

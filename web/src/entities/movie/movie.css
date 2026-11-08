@@ -190,3 +190,79 @@
   font-size: 11px;
   color: var(--color-muted);
 }
+
+/* Пиктограмма рилса: подсказки добавления и источник в карточке. */
+.reel-icon {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: var(--color-raised);
+  color: var(--color-accent-text);
+}
+.reel-icon svg {
+  width: 11px;
+  height: 13px;
+  margin-left: 2px;
+  fill: currentColor;
+}
+.reel-icon--sm {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+}
+.reel-icon--sm svg {
+  width: 7px;
+  height: 8px;
+  margin-left: 1px;
+}
+.reel-icon--lg {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+}
+.reel-icon--lg svg {
+  width: 17px;
+  height: 20px;
+  margin-left: 3px;
+}
+.movie-source {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-edge);
+  color: var(--color-text);
+  text-decoration: none;
+}
+.movie-source:active {
+  background: var(--color-raised);
+}
+.movie-source__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.movie-source__title {
+  font-size: 15px;
+  font-weight: 600;
+}
+.movie-source__url {
+  overflow: hidden;
+  color: var(--color-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.movie-source__open {
+  flex: none;
+  color: var(--color-accent-text);
+  font-size: 18px;
+  font-weight: 500;
+}

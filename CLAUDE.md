@@ -47,7 +47,7 @@ Clean architecture, dependencies point inward: `domain` → `usecase` → `repos
 ### Add-movie pipeline (spans transport → usecase → worker → repos)
 
 1. Link/title → row in `enrichment_jobs` (`pending`); user gets an immediate reply / HTTP 202 with `job_id`.
-2. Worker claims jobs with `FOR UPDATE SKIP LOCKED`, retries via `run_after` up to `WORKER_MAX_ATTEMPTS`. For reels: scraper → LLM extracts `{title, year, confidence}`.
+2. Worker claims jobs with `FOR UPDATE SKIP LOCKED`, retries via `run_after` up to `WORKER_MAX_ATTEMPTS`. For reels: scraper → rule-based guesses from the caption (`enrichment.CaptionTitles`: quotes, «фильм: …» markers, `(year)`), the first one found in the catalog wins → otherwise LLM extracts `{title, year, confidence}` (if enabled).
 3. Catalog search: TMDB, fallback Kinopoisk. Confident match → single candidate; otherwise top-5 stored in `candidates`, job → `confirming`.
 4. `Confirm` writes movie, genres, directors, `user_movies` row and closes the job in **one transaction**; catalog details are fetched *before* the tx. Duplicate → `ErrAlreadyInCollection` (HTTP 409 with `existing_user_movie_id`).
 
@@ -66,4 +66,4 @@ Feature-sliced layout: `app/` (root, hash-based router in `route.ts`/`navigation
 
 ## Config
 
-All config comes from env (`internal/config/config.go`, `.env` via godotenv). Required: `POSTGRES_DSN`, `TELEGRAM_BOT_TOKEN`, `TMDB_API_KEY`; validation reports all missing vars at once. Without `INSTAGRAM_API_KEY`/`LLM_API_KEY` reel links are rejected but title search works. Mini App requires HTTPS `PUBLIC_URL`. Deployment: `deployments/compose.prod.yml` (Postgres + migrate container + app + Caddy); see `DEPLOY.md`. Architectural decisions: `docs/adr/`.
+All config comes from env (`internal/config/config.go`, `.env` via godotenv). Required: `POSTGRES_DSN`, `TELEGRAM_BOT_TOKEN`, `TMDB_API_KEY`; validation reports all missing vars at once. Without `INSTAGRAM_API_KEY` reel links are rejected but title search works; without `LLM_API_KEY` reels work only via caption patterns. Mini App requires HTTPS `PUBLIC_URL`. Deployment: `deployments/compose.prod.yml` (Postgres + migrate container + app + Caddy); see `DEPLOY.md`. Architectural decisions: `docs/adr/`.

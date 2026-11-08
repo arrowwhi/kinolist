@@ -33,6 +33,13 @@ export function plural(
         ? forms[1]
         : forms[2]
 }
+/** Ссылка без схемы, www и хвостового слэша — для показа, не для перехода. */
+export function shortUrl(url: string): string {
+  return url
+    .replace(/^https?:\/\//i, '')
+    .replace(/^www\./i, '')
+    .replace(/\/$/, '')
+}
 export function safeExternalUrl(value?: string) {
   if (!value) return null
   try {

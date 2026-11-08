@@ -104,10 +104,16 @@ func TestEnqueue(t *testing.T) {
 			wantErr: domain.ErrFetcherDisabled,
 		},
 		{
-			name:  "reel rejected right away when extractor is not configured",
+			name:  "reel is queued without extractor: caption patterns work without LLM",
 			input: "https://instagram.com/reel/Abc123/", fetcherOn: true, extractorOff: true,
-			setup:   func(d deps) {},
-			wantErr: domain.ErrExtractorDisabled,
+			setup: func(d deps) {
+				d.jobs.EXPECT().Create(gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, j domain.Job) (domain.Job, error) {
+						j.ID = 3
+						return j, nil
+					})
+			},
+			wantKind: domain.KindReel, wantURL: "https://instagram.com/reel/Abc123/",
 		},
 		{
 			name: "foreign link is rejected", input: "https://tiktok.com/video/1",
@@ -280,34 +286,179 @@ func TestProcessTitleJob(t *testing.T) {
 func TestProcessReelJob(t *testing.T) {
 	t.Parallel()
 
-	t.Run("caption yields a title and a confident match", func(t *testing.T) {
+	const reelURL = "https://instagram.com/reel/A/"
+	reelJob := func() domain.Job {
+		return domain.Job{ID: 1, UserID: 7, ChatID: 99, Kind: domain.KindReel, SourceURL: reelURL}
+	}
+	expectConfirming := func(d deps) {
+		d.jobs.EXPECT().Update(gomock.Any(), gomock.Any()).Return(nil)
+		d.jobs.EXPECT().SaveSession(gomock.Any(), gomock.Any()).Return(nil)
+	}
+	expectFailed := func(t *testing.T, d deps) {
+		d.jobs.EXPECT().Update(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, j domain.Job) error {
+				if j.Status != domain.StatusFailed {
+					t.Fatalf("status = %q, want failed", j.Status)
+				}
+				return nil
+			})
+		d.jobs.EXPECT().ClearSession(gomock.Any(), int64(7)).Return(nil)
+	}
+
+	t.Run("quoted title is searched without calling LLM", func(t *testing.T) {
 		t.Parallel()
 
 		u, d := newUseCase(t, false)
-		content := domain.ReelContent{Caption: "топ драм: Дюна (2021)"}
+		content := domain.ReelContent{Caption: "Пересматриваю «Дюна» (2021) 🔥"}
 
 		d.fetcher.EXPECT().Enabled().Return(true)
-		d.extractor.EXPECT().Enabled().Return(true)
-		d.fetcher.EXPECT().Fetch(gomock.Any(), "https://instagram.com/reel/A/").Return(content, nil)
-		d.extractor.EXPECT().Extract(gomock.Any(), content).
-			Return(domain.ExtractedTitle{Title: "Дюна", Year: 2021, Confidence: 0.9}, nil)
+		d.fetcher.EXPECT().Fetch(gomock.Any(), reelURL).Return(content, nil)
 		d.primary.EXPECT().Search(gomock.Any(), "Дюна", int16(2021)).
 			Return([]movie.Candidate{candidate(438631, "Дюна", "Dune", 2021)}, nil)
-		d.jobs.EXPECT().Update(gomock.Any(), gomock.Any()).Return(nil)
-		d.jobs.EXPECT().SaveSession(gomock.Any(), gomock.Any()).Return(nil)
+		expectConfirming(d)
 
-		out, err := u.Process(context.Background(), domain.Job{
-			ID: 1, UserID: 7, ChatID: 99, Kind: domain.KindReel,
-			SourceURL: "https://instagram.com/reel/A/",
-		})
+		out, err := u.Process(context.Background(), reelJob())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if out.Kind != movie.MatchExact {
 			t.Fatalf("match kind = %q, want exact", out.Kind)
 		}
-		if out.Job.QueryTitle != "Дюна" || out.Job.QueryYear != 2021 {
-			t.Fatalf("extracted query not persisted on job: %+v", out.Job)
+		if out.Job.QueryTitle != "Дюна" || out.Job.QueryYear != 2021 || out.Job.RawTitle != content.Caption {
+			t.Fatalf("query not persisted on job: %+v", out.Job)
+		}
+	})
+
+	t.Run("first guess unknown to catalog, second one is taken", func(t *testing.T) {
+		t.Parallel()
+
+		u, d := newUseCase(t, false)
+		content := domain.ReelContent{Caption: "«Лучший вечер» — смотрим «Престиж»"}
+
+		d.fetcher.EXPECT().Enabled().Return(true)
+		d.fetcher.EXPECT().Fetch(gomock.Any(), reelURL).Return(content, nil)
+		gomock.InOrder(
+			d.primary.EXPECT().Search(gomock.Any(), "Лучший вечер", int16(0)).Return(nil, nil),
+			d.primary.EXPECT().Search(gomock.Any(), "Престиж", int16(0)).
+				Return([]movie.Candidate{candidate(1124, "Престиж", "The Prestige", 2006)}, nil),
+		)
+		expectConfirming(d)
+
+		out, err := u.Process(context.Background(), reelJob())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if out.Job.QueryTitle != "Престиж" {
+			t.Fatalf("query title = %q, want Престиж", out.Job.QueryTitle)
+		}
+	})
+
+	t.Run("no patterns in caption falls back to LLM", func(t *testing.T) {
+		t.Parallel()
+
+		u, d := newUseCase(t, false)
+		content := domain.ReelContent{Caption: "когда пересмотрел дюну и понял всё"}
+
+		d.fetcher.EXPECT().Enabled().Return(true)
+		d.extractor.EXPECT().Enabled().Return(true)
+		d.fetcher.EXPECT().Fetch(gomock.Any(), reelURL).Return(content, nil)
+		d.extractor.EXPECT().Extract(gomock.Any(), content).
+			Return(domain.ExtractedTitle{Title: "Дюна", Year: 2021, Confidence: 0.9}, nil)
+		d.primary.EXPECT().Search(gomock.Any(), "Дюна", int16(2021)).
+			Return([]movie.Candidate{candidate(438631, "Дюна", "Dune", 2021)}, nil)
+		expectConfirming(d)
+
+		out, err := u.Process(context.Background(), reelJob())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if out.Kind != movie.MatchExact || out.Job.QueryTitle != "Дюна" || out.Job.QueryYear != 2021 {
+			t.Fatalf("unexpected outcome: kind=%q job=%+v", out.Kind, out.Job)
+		}
+	})
+
+	t.Run("LLM repeating an already searched guess does not search again", func(t *testing.T) {
+		t.Parallel()
+
+		u, d := newUseCase(t, false)
+		content := domain.ReelContent{Caption: "«Неизвестное кино»"}
+
+		d.fetcher.EXPECT().Enabled().Return(true)
+		d.extractor.EXPECT().Enabled().Return(true)
+		d.fetcher.EXPECT().Fetch(gomock.Any(), reelURL).Return(content, nil)
+		d.primary.EXPECT().Search(gomock.Any(), "Неизвестное кино", int16(0)).Return(nil, nil).Times(1)
+		d.extractor.EXPECT().Extract(gomock.Any(), content).
+			Return(domain.ExtractedTitle{Title: "неизвестное кино", Confidence: 0.5}, nil)
+		expectFailed(t, d)
+
+		out, err := u.Process(context.Background(), reelJob())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !errors.Is(out.Err, movie.ErrNoCandidates) {
+			t.Fatalf("outcome err = %v, want ErrNoCandidates", out.Err)
+		}
+	})
+
+	t.Run("without extractor a quoted title still works", func(t *testing.T) {
+		t.Parallel()
+
+		u, d := newUseCase(t, false)
+
+		d.fetcher.EXPECT().Enabled().Return(true)
+		d.fetcher.EXPECT().Fetch(gomock.Any(), reelURL).
+			Return(domain.ReelContent{Caption: "Фильм: Престиж"}, nil)
+		d.primary.EXPECT().Search(gomock.Any(), "Престиж", int16(0)).
+			Return([]movie.Candidate{candidate(1124, "Престиж", "The Prestige", 2006)}, nil)
+		expectConfirming(d)
+
+		out, err := u.Process(context.Background(), reelJob())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if out.Kind != movie.MatchExact {
+			t.Fatalf("match kind = %q, want exact", out.Kind)
+		}
+	})
+
+	t.Run("without extractor an unknown guess fails as not found", func(t *testing.T) {
+		t.Parallel()
+
+		u, d := newUseCase(t, false)
+
+		d.fetcher.EXPECT().Enabled().Return(true)
+		d.extractor.EXPECT().Enabled().Return(false)
+		d.fetcher.EXPECT().Fetch(gomock.Any(), reelURL).
+			Return(domain.ReelContent{Caption: "«Неизвестное кино»"}, nil)
+		d.primary.EXPECT().Search(gomock.Any(), "Неизвестное кино", int16(0)).Return(nil, nil)
+		expectFailed(t, d)
+
+		out, err := u.Process(context.Background(), reelJob())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !errors.Is(out.Err, movie.ErrNoCandidates) {
+			t.Fatalf("outcome err = %v, want ErrNoCandidates", out.Err)
+		}
+	})
+
+	t.Run("without extractor and patterns the caption is unrecognized", func(t *testing.T) {
+		t.Parallel()
+
+		u, d := newUseCase(t, false)
+
+		d.fetcher.EXPECT().Enabled().Return(true)
+		d.extractor.EXPECT().Enabled().Return(false)
+		d.fetcher.EXPECT().Fetch(gomock.Any(), gomock.Any()).
+			Return(domain.ReelContent{Caption: "подпишись 🔥"}, nil)
+		expectFailed(t, d)
+
+		out, err := u.Process(context.Background(), reelJob())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !errors.Is(out.Err, domain.ErrTitleNotRecognized) {
+			t.Fatalf("outcome err = %v, want ErrTitleNotRecognized", out.Err)
 		}
 	})
 
@@ -322,18 +473,9 @@ func TestProcessReelJob(t *testing.T) {
 			Return(domain.ReelContent{Caption: "подпишись 🔥"}, nil)
 		d.extractor.EXPECT().Extract(gomock.Any(), gomock.Any()).
 			Return(domain.ExtractedTitle{}, nil)
-		d.jobs.EXPECT().Update(gomock.Any(), gomock.Any()).
-			DoAndReturn(func(_ context.Context, j domain.Job) error {
-				if j.Status != domain.StatusFailed {
-					t.Fatalf("status = %q, want failed (unrecognized title is not retryable)", j.Status)
-				}
-				return nil
-			})
-		d.jobs.EXPECT().ClearSession(gomock.Any(), int64(7)).Return(nil)
+		expectFailed(t, d)
 
-		out, err := u.Process(context.Background(), domain.Job{
-			ID: 1, UserID: 7, ChatID: 99, Kind: domain.KindReel, SourceURL: "https://instagram.com/reel/A/",
-		})
+		out, err := u.Process(context.Background(), reelJob())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

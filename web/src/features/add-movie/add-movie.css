@@ -28,3 +28,117 @@
   padding: 56px 12px;
   text-align: center;
 }
+
+.search-progress__text {
+  max-width: 300px;
+  text-wrap: balance;
+}
+/* Добавление из рилса (Figma: «Добавление из рилса», экраны 22–25). */
+.reel-hint,
+.reel-source {
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-edge);
+}
+.reel-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.reel-hint__head,
+.reel-source {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.reel-hint__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.reel-hint__text {
+  margin: 2px 0 0;
+  font-size: 13px;
+}
+.reel-hint .small {
+  margin: 0;
+}
+.caption-patterns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.caption-pattern {
+  padding: 7px 12px;
+  border-radius: 99px;
+  background: var(--color-raised);
+  color: var(--color-muted);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.caption-pattern__title,
+.reel-source__title {
+  color: var(--color-accent-text);
+}
+.reel-source {
+  padding: 12px 14px;
+}
+.reel-source p {
+  margin: 0;
+}
+.reel-source__query {
+  margin-top: 2px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.reel-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 8px 14px 8px 10px;
+  border-radius: 99px;
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-edge);
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.reel-link__url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+.reel-failure__tip {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-edge);
+}
+.reel-failure__tip p {
+  margin: 0;
+}
+.reel-failure__head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 36px 0 8px;
+  text-align: center;
+}
+.reel-failure__head h2,
+.reel-failure__head p {
+  margin: 0;
+}
+.reel-failure__head p {
+  max-width: 300px;
+}

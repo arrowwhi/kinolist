@@ -14,7 +14,8 @@ import {
   InlineError,
   SkeletonList,
 } from '../../shared/ui/Feedback'
-import { formatDate, safeExternalUrl } from '../../shared/lib/format'
+import { formatDate } from '../../shared/lib/format'
+import { MovieSource } from '../../entities/movie/MovieSource'
 export function MoviePage({
   id,
   revision,
@@ -36,7 +37,6 @@ export function MoviePage({
   } = useResource((signal) => api.getMovie(id, signal), `${id}:${revision}`)
   const mutation = useMutation()
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const source = safeExternalUrl(item?.source_url)
   const watched = item?.status === 'watched'
   return (
     <Shell
@@ -86,6 +86,12 @@ export function MoviePage({
               <small>Изменить заметку</small>
             </button>
           </section>
+          {item.source_url && (
+            <section className="stack stack--tight">
+              <h2>Откуда</h2>
+              <MovieSource source={item.source} url={item.source_url} />
+            </section>
+          )}
           <p className="muted small">
             Добавлено в коллекцию · {formatDate(item.added_at)}
           </p>
@@ -127,16 +133,6 @@ export function MoviePage({
               >
                 Вернуть в «На потом»
               </Button>
-            )}
-            {source && (
-              <a
-                className="button button--secondary"
-                href={source}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Открыть источник ↗
-              </a>
             )}
             <Button
               variant="quiet"

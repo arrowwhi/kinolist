@@ -98,6 +98,7 @@ type Job struct {
 	SourceURL  string      `json:"source_url,omitempty"`
 	Candidates []Candidate `json:"candidates"`
 	Error      string      `json:"error,omitempty"`
+	ErrorCode  string      `json:"error_code,omitempty"`
 }
 
 type ConfirmJobRequest struct {
