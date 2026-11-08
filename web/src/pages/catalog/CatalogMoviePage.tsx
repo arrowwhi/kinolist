@@ -12,6 +12,8 @@ import { useResource } from '../../shared/hooks/useResource'
 import { useMutation } from '../../shared/hooks/useMutation'
 import { Button } from '../../shared/ui/Button'
 import { ErrorState, InlineError, SkeletonList } from '../../shared/ui/Feedback'
+import { useOpenActor } from '../../features/actors/useOpenActor'
+import { personPath } from '../../shared/lib/navigation'
 
 // Карточка тайтла из каталога, которого ещё нет в коллекции (экраны
 // «Каталог / не в коллекции» и «Каталог / скоро»): выглядит как экран
@@ -29,7 +31,7 @@ export function CatalogMoviePage({
   back: () => void
   changed: (message: string) => void
 }) {
-  const { provider, mediaType, externalId, directorId } = route
+  const { provider, mediaType, externalId, directorId, actorId } = route
   const resource = useResource(
     (signal) =>
       catalogApi.get(provider, mediaType, externalId, signal).catch((error) => {
@@ -41,6 +43,7 @@ export function CatalogMoviePage({
   )
   const movie = resource.data
   const mutation = useMutation()
+  const actor = useOpenActor(navigate)
   const [rating, setRating] = useState(false)
   const ownedId = movie?.user_movie_id
   // Тайтл уже в коллекции — показываем его настоящую карточку.
@@ -86,6 +89,9 @@ export function CatalogMoviePage({
   const tv = mediaType === 'tv'
   const director = directorId
     ? movie?.directors?.find((d) => d.id === directorId)
+    : undefined
+  const castSource = actorId
+    ? movie?.cast?.find((c) => c.id === actorId)
     : undefined
   return (
     <Shell
@@ -134,8 +140,11 @@ export function CatalogMoviePage({
                 ? upcomingLabel(movie.release_date, movie.year)
                 : undefined
             }
-            onDirector={(id) => navigate(`/v2/directors/${id}`)}
+            onDirector={(id) => navigate(personPath('director', id))}
+            onActor={actor.open}
+            actorPending={actor.pending}
           />
+          <InlineError message={actor.error} />
           <p className="muted small">
             {[
               'Нет в коллекции',
@@ -143,7 +152,9 @@ export function CatalogMoviePage({
                 ? 'ещё не вышел'
                 : director
                   ? `из фильмографии: ${director.name}`
-                  : '',
+                  : castSource
+                    ? `из ролей: ${castSource.name}`
+                    : '',
             ]
               .filter(Boolean)
               .join(' · ')}

@@ -4,6 +4,8 @@ import "errors"
 
 var (
 	ErrDirectorNotFound      = errors.New("director not found")
+	ErrActorNotFound         = errors.New("actor not found")
+	ErrInvalidActorFilter    = errors.New("invalid actor filter")
 	ErrPersonNotFound        = errors.New("person not found in catalog")
 	ErrInvalidPersonID       = errors.New("invalid person id")
 	ErrInvalidDirectorFilter = errors.New("invalid director filter")

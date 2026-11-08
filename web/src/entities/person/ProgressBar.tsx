@@ -7,7 +7,7 @@ export function ProgressBar({
 }) {
   return (
     <span
-      className="director-progress"
+      className="person-progress"
       role="progressbar"
       aria-label={label}
       aria-valuemin={0}

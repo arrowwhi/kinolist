@@ -31,6 +31,20 @@ type Movie struct {
 	Rating          float32    `json:"rating,omitempty"`
 	Genres          []Genre    `json:"genres"`
 	Directors       []Director `json:"directors"`
+	// Cast — первые 10 актёров в порядке титров; пустой массив без данных.
+	Cast []CastMember `json:"cast"`
+}
+
+// CastMember — участник блока «В ролях». id появляется, когда актёр заведён
+// в справочнике; иначе профиль открывается через POST /actors/import.
+type CastMember struct {
+	ID           int64  `json:"id,omitempty"`
+	TMDBID       int32  `json:"tmdb_id,omitempty"`
+	KinopoiskID  int32  `json:"kinopoisk_id,omitempty"`
+	Name         string `json:"name"`
+	OriginalName string `json:"original_name"`
+	Character    string `json:"character"`
+	PhotoURL     string `json:"photo_url,omitempty"`
 }
 
 type UserMovie struct {
@@ -72,21 +86,22 @@ type CreateJobRequest struct {
 }
 
 type Candidate struct {
-	MediaType       string     `json:"media_type"`
-	SeasonCount     *int16     `json:"season_count"`
-	OriginalTitle   string     `json:"original_title,omitempty"`
-	RuntimeMin      int16      `json:"runtime_min,omitempty"`
-	RatingProvider  string     `json:"rating_provider,omitempty"`
-	RatingVoteCount *int32     `json:"rating_vote_count"`
-	Genres          []Genre    `json:"genres"`
-	Directors       []Director `json:"directors"`
-	Provider        string     `json:"provider"`
-	ExternalID      int32      `json:"external_id"`
-	Title           string     `json:"title"`
-	Year            int16      `json:"year,omitempty"`
-	Overview        string     `json:"overview"`
-	PosterURL       string     `json:"poster_url,omitempty"`
-	Rating          float32    `json:"rating,omitempty"`
+	MediaType       string       `json:"media_type"`
+	SeasonCount     *int16       `json:"season_count"`
+	OriginalTitle   string       `json:"original_title,omitempty"`
+	RuntimeMin      int16        `json:"runtime_min,omitempty"`
+	RatingProvider  string       `json:"rating_provider,omitempty"`
+	RatingVoteCount *int32       `json:"rating_vote_count"`
+	Genres          []Genre      `json:"genres"`
+	Directors       []Director   `json:"directors"`
+	Cast            []CastMember `json:"cast"`
+	Provider        string       `json:"provider"`
+	ExternalID      int32        `json:"external_id"`
+	Title           string       `json:"title"`
+	Year            int16        `json:"year,omitempty"`
+	Overview        string       `json:"overview"`
+	PosterURL       string       `json:"poster_url,omitempty"`
+	Rating          float32      `json:"rating,omitempty"`
 }
 
 type Job struct {
@@ -218,7 +233,28 @@ type DirectorProfile struct {
 	Filmography   []FilmographyItem `json:"filmography"`
 }
 
-// PersonSearchResult: id есть, только если человек уже заведён как режиссёр.
+// ActorOverview — карточка в разделе «Актёры»: поля и правила подсчёта как
+// у режиссёра, счётчики — по ролям.
+type ActorOverview = DirectorOverview
+
+type ActorOverviewList = DirectorOverviewList
+
+// ActorFilmographyItem — строка «Роли»: работа плюс персонаж.
+type ActorFilmographyItem struct {
+	FilmographyItem
+	Character string `json:"character"`
+}
+
+type ActorProfile struct {
+	ActorOverview
+	Biography     string                 `json:"biography"`
+	BiographyLang string                 `json:"biography_lang,omitempty"`
+	Stale         bool                   `json:"stale"`
+	Filmography   []ActorFilmographyItem `json:"filmography"`
+}
+
+// PersonSearchResult: id есть, только если человек уже заведён в справочнике
+// раздела (режиссёров или актёров).
 type PersonSearchResult struct {
 	ID                 *int64   `json:"id"`
 	TMDBID             int32    `json:"tmdb_id"`

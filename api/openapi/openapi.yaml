@@ -150,14 +150,20 @@ paths:
     get:
       summary: Поиск людей в каталоге TMDB
       description: |
-        Режиссёры идут первыми, остальные не отбрасываются. id заполнен, только
-        если человек уже заведён в справочнике. Пустой query возвращает
-        подсказки — режиссёров из коллекции без подписки (без запроса в TMDB).
-        Ничего не записывает в базу.
+        Люди нужной роли идут первыми (role=director — known_for_department
+        Directing, role=actor — Acting), остальные не отбрасываются. id и
+        followed относятся к справочнику этой роли: id заполнен, только если
+        человек уже заведён как режиссёр (или актёр при role=actor). Пустой
+        query возвращает подсказки — людей этой роли из коллекции без подписки
+        (без запроса в TMDB). Ничего не записывает в базу.
       parameters:
         - name: query
           in: query
           schema: { type: string }
+        - name: role
+          in: query
+          description: Для какого раздела ищем; по умолчанию director (как раньше)
+          schema: { type: string, enum: [director, actor], default: director }
       responses:
         '200':
           description: До 20 человек
@@ -251,6 +257,131 @@ paths:
     delete:
       summary: Отписаться от режиссёра
       description: Режиссёр с работами в коллекции остаётся в scope=collection.
+      responses:
+        '204': { description: Подписки нет }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /my-actors:
+    get:
+      summary: Мои актёры — отслеживаемые и из коллекции
+      description: |
+        Экран «30 · Мои актёры». Как /my-directors, но «из коллекции» —
+        только актёры, сыгравшие в двух и более работах коллекции пользователя
+        (в пределах сохранённого топа актёрского состава работы). Иначе каждая
+        работа приносила бы десяток людей. Счётчики объединяют фильмографию из
+        каталога с работами коллекции, которых в каталоге нет. counts учитывают
+        query, но не scope.
+      parameters:
+        - name: scope
+          in: query
+          schema: { type: string, enum: [all, followed, collection], default: all }
+          description: collection — актёры из коллекции без подписки
+        - name: query
+          in: query
+          description: Поиск по русскому и оригинальному имени
+          schema: { type: string }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [name, progress, user_rating], default: name }
+        - name: order
+          in: query
+          description: По умолчанию asc для name и desc для остальных
+          schema: { type: string, enum: [asc, desc] }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ActorOverviewList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /actors/import:
+    post:
+      summary: Завести человека из TMDB как актёра
+      description: |
+        Идемпотентно: загружает профиль и фильмографию ролей, уточняет русское
+        имя через Кинопоиск. Нужен, чтобы открыть профиль человека из поиска
+        («32 · Добавить актёра») или из блока «В ролях» карточки, если у
+        участника состава ещё нет внутреннего id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TMDBPersonRequest' }
+      responses:
+        '200':
+          description: Актёр с внутренним id
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ActorOverview' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+
+  /actors/follow-by-tmdb:
+    post:
+      summary: Завести человека из TMDB как актёра и подписаться
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TMDBPersonRequest' }
+      responses:
+        '200':
+          description: Актёр, followed=true
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ActorOverview' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+
+  /actors/{id}/profile:
+    get:
+      summary: Профиль актёра и все его роли
+      description: |
+        Экран «31 · Профиль актёра». Правила свежести снимка те же, что у
+        режиссёра (ACTOR_WORKS_TTL, обновление в запросе до 5 секунд, stale=true
+        при недоступном каталоге). Роли отсортированы от новых к старым;
+        фильтры и другие сортировки делает клиент.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ActorProfile' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /actors/{id}/follow:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64, minimum: 1 }
+    put:
+      summary: Подписаться на актёра (идемпотентно)
+      responses:
+        '204': { description: Подписка есть }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      summary: Отписаться от актёра
+      description: Актёр с двумя и более работами в коллекции остаётся в scope=collection.
       responses:
         '204': { description: Подписки нет }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -650,6 +781,69 @@ components:
             filmography:
               type: array
               items: { $ref: '#/components/schemas/FilmographyItem' }
+    ActorOverview:
+      description: |
+        Поля и правила подсчёта как у DirectorOverview; work_count и прочие
+        счётчики считаются по ролям (одна работа — одна роль, даже если
+        персонажей несколько). known_for — до трёх самых популярных ролей.
+      allOf:
+        - $ref: '#/components/schemas/DirectorOverview'
+    ActorOverviewList:
+      type: object
+      required: [items, total, limit, offset, counts]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ActorOverview' }
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+        counts:
+          type: object
+          required: [all, followed, collection]
+          properties:
+            all: { type: integer }
+            followed: { type: integer }
+            collection: { type: integer }
+    ActorFilmographyItem:
+      description: |
+        Строка «Роли» в профиле актёра. Как FilmographyItem, плюс персонаж.
+        episode_count — эпизоды, в которых снимался актёр.
+      allOf:
+        - $ref: '#/components/schemas/FilmographyItem'
+        - type: object
+          required: [character]
+          properties:
+            character:
+              type: string
+              description: Персонаж; несколько — через « / »; пустая строка, если неизвестен
+    ActorProfile:
+      allOf:
+        - $ref: '#/components/schemas/ActorOverview'
+        - type: object
+          required: [biography, stale, filmography]
+          properties:
+            biography: { type: string }
+            biography_lang: { type: string, enum: [ru, en] }
+            stale: { type: boolean }
+            filmography:
+              type: array
+              items: { $ref: '#/components/schemas/ActorFilmographyItem' }
+    CastMember:
+      type: object
+      required: [name, original_name, character]
+      description: |
+        Участник блока «В ролях» карточки. В предпросмотре и карточке каталога
+        внутреннего id может не быть — тогда профиль открывается через
+        POST /actors/import по tmdb_id.
+      properties:
+        id: { type: integer, format: int64, minimum: 1 }
+        tmdb_id: { type: integer, minimum: 1 }
+        kinopoisk_id: { type: integer, minimum: 1 }
+        name: { type: string }
+        original_name: { type: string }
+        character: { type: string, description: Пустая строка, если неизвестен }
+        photo_url: { type: string, format: uri }
     PersonSearchResult:
       type: object
       required: [id, tmdb_id, name, original_name, known_for, followed]
@@ -735,7 +929,7 @@ components:
 
     Movie:
       type: object
-      required: [id, title, overview, genres, directors, media_type, season_count]
+      required: [id, title, overview, genres, directors, cast, media_type, season_count]
       properties:
         media_type: { type: string, enum: [movie, tv] }
         season_count:
@@ -758,6 +952,10 @@ components:
           type: array
           description: Все известные режиссёры; пустой массив при отсутствии данных
           items: { $ref: '#/components/schemas/Director' }
+        cast:
+          type: array
+          description: Первые 10 актёров в порядке титров; пустой массив при отсутствии данных
+          items: { $ref: '#/components/schemas/CastMember' }
         genres:
           type: array
           items: { $ref: '#/components/schemas/Genre' }
@@ -828,7 +1026,7 @@ components:
 
     Candidate:
       type: object
-      required: [provider, external_id, title, overview, directors, media_type, season_count]
+      required: [provider, external_id, title, overview, directors, cast, media_type, season_count]
       properties:
         media_type: { type: string, enum: [movie, tv] }
         season_count:
@@ -843,6 +1041,10 @@ components:
           type: array
           description: Все известные режиссёры; пустой массив при отсутствии данных
           items: { $ref: '#/components/schemas/Director' }
+        cast:
+          type: array
+          description: Первые 10 актёров в порядке титров; пустой массив при отсутствии данных
+          items: { $ref: '#/components/schemas/CastMember' }
         genres:
           type: array
           items: { $ref: '#/components/schemas/Genre' }

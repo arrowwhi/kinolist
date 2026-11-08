@@ -24,6 +24,7 @@ type RouterDeps struct {
 	Movies      *handler.Movie
 	Jobs        *handler.Enrichment
 	Directors   *handler.Directors
+	Actors      *handler.Actors
 	Health      *handler.Health
 	WebAssets   fs.FS
 	// ResolveUser превращает подтверждённую Telegram личность во внутренний
@@ -65,12 +66,19 @@ func NewRouter(d RouterDeps) http.Handler {
 		api.Get("/directors/{id}", d.Movies.GetDirector)
 		// Раздел «Мои режиссёры»: подписки и полная фильмография из каталога.
 		api.Get("/my-directors", d.Directors.Mine)
-		api.Get("/people/search", d.Directors.Search)
+		api.Get("/people/search", handler.PeopleSearch(d.Directors, d.Actors))
 		api.Post("/directors/import", d.Directors.Import)
 		api.Post("/directors/follow-by-tmdb", d.Directors.FollowByTMDB)
 		api.Get("/directors/{id}/profile", d.Directors.Profile)
 		api.Put("/directors/{id}/follow", d.Directors.Follow)
 		api.Delete("/directors/{id}/follow", d.Directors.Unfollow)
+		// Раздел «Актёры»: устроен так же, справочник отдельный.
+		api.Get("/my-actors", d.Actors.Mine)
+		api.Post("/actors/import", d.Actors.Import)
+		api.Post("/actors/follow-by-tmdb", d.Actors.FollowByTMDB)
+		api.Get("/actors/{id}/profile", d.Actors.Profile)
+		api.Put("/actors/{id}/follow", d.Actors.Follow)
+		api.Delete("/actors/{id}/follow", d.Actors.Unfollow)
 
 		// Карточка работы прямо из каталога: фильмография режиссёра.
 		api.Get("/catalog/{provider}/{media_type}/{external_id}", d.Jobs.CatalogTitle)

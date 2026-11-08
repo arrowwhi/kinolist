@@ -1,5 +1,6 @@
 import { DirectorCredits } from '../director/DirectorCredits'
-import type { Movie } from '../../api/types'
+import { CastCredits } from '../actor/CastCredits'
+import type { CastMember, Movie } from '../../api/types'
 import { formatRuntime } from '../../shared/lib/format'
 import { movieMetadata } from './metadata'
 import { Poster } from './Poster'
@@ -8,11 +9,16 @@ export function MoviePreview({
   movie,
   upcoming,
   onDirector,
+  onActor,
+  actorPending,
 }: {
   movie: Movie
   // Тайтл ещё не вышел: вместо рейтинга — метка «Скоро · декабрь 2026».
   upcoming?: string
   onDirector?: (id: number) => void
+  // Без onActor участники состава не кликабельны (экран подтверждения).
+  onActor?: (member: CastMember, key: string) => void
+  actorPending?: string | null
 }) {
   return (
     <>
@@ -43,6 +49,7 @@ export function MoviePreview({
         ))}
       </div>
       <DirectorCredits directors={movie.directors} onOpen={onDirector} />
+      <CastCredits cast={movie.cast} pending={actorPending} onOpen={onActor} />
       <p className="muted overview">
         {movie.overview || 'В каталоге пока нет описания.'}
       </p>

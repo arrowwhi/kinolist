@@ -53,16 +53,20 @@ func DirectorOverviewList(p directorsuc.Page) dto.DirectorOverviewList {
 	}
 }
 
+func filmographyItem(w movie.FilmographyItem, now time.Time) dto.FilmographyItem {
+	return dto.FilmographyItem{
+		TMDBID: w.TMDBID, MovieID: w.MovieID, MediaType: string(w.MediaType.Normalize()),
+		Title: w.Title, OriginalTitle: w.OriginalTitle, Year: w.Year, ReleaseDate: date(w.ReleaseDate),
+		PosterURL: PosterURL(w.PosterPath), Rating: w.Rating, VoteCount: w.VoteCount, EpisodeCount: w.EpisodeCount,
+		Upcoming:    w.UserMovieID == 0 && w.Upcoming(now),
+		UserMovieID: w.UserMovieID, Status: string(w.Status), UserRating: w.UserRating,
+	}
+}
+
 func DirectorProfile(p movie.DirectorProfile, now time.Time) dto.DirectorProfile {
 	items := make([]dto.FilmographyItem, 0, len(p.Filmography))
 	for _, w := range p.Filmography {
-		items = append(items, dto.FilmographyItem{
-			TMDBID: w.TMDBID, MovieID: w.MovieID, MediaType: string(w.MediaType.Normalize()),
-			Title: w.Title, OriginalTitle: w.OriginalTitle, Year: w.Year, ReleaseDate: date(w.ReleaseDate),
-			PosterURL: PosterURL(w.PosterPath), Rating: w.Rating, VoteCount: w.VoteCount, EpisodeCount: w.EpisodeCount,
-			Upcoming:    w.UserMovieID == 0 && w.Upcoming(now),
-			UserMovieID: w.UserMovieID, Status: string(w.Status), UserRating: w.UserRating,
-		})
+		items = append(items, filmographyItem(w, now))
 	}
 	return dto.DirectorProfile{
 		DirectorOverview: DirectorOverview(p.DirectorOverview),
@@ -90,8 +94,8 @@ func PersonSearchList(items []movie.PersonSearchResult) dto.PersonSearchList {
 			TMDBID: p.TMDBID, Name: p.Name, OriginalName: p.OriginalName, PhotoURL: PosterURL(p.ProfilePath),
 			KnownForDepartment: p.KnownForDepartment, KnownFor: nonNil(p.KnownFor), Followed: p.Followed,
 		}
-		if p.DirectorID > 0 {
-			id := p.DirectorID
+		if p.PersonID > 0 {
+			id := p.PersonID
 			r.ID = &id
 		}
 		out = append(out, r)

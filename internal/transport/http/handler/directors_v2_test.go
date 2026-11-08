@@ -44,7 +44,7 @@ func (s *directorsStub) Profile(_ context.Context, _, id int64) (movie.DirectorP
 
 func (s *directorsStub) Search(_ context.Context, _ int64, query string) ([]movie.PersonSearchResult, error) {
 	s.query = query
-	return []movie.PersonSearchResult{{Person: movie.Person{TMDBID: 525, Name: "Нолан"}}, {Person: movie.Person{TMDBID: 1, Name: "Вильнёв"}, DirectorID: 5, Followed: true}}, s.err
+	return []movie.PersonSearchResult{{Person: movie.Person{TMDBID: 525, Name: "Нолан"}}, {Person: movie.Person{TMDBID: 1, Name: "Вильнёв"}, PersonID: 5, Followed: true}}, s.err
 }
 
 func (s *directorsStub) FollowByTMDB(_ context.Context, _ int64, tmdbID int32) (movie.DirectorOverview, error) {

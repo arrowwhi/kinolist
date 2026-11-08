@@ -28,6 +28,7 @@ import (
 	httpmiddleware "github.com/arrowwhi/kinolist/internal/transport/http/middleware"
 	"github.com/arrowwhi/kinolist/internal/transport/telegram"
 	"github.com/arrowwhi/kinolist/internal/transport/worker"
+	actorsuc "github.com/arrowwhi/kinolist/internal/usecase/actors"
 	collectionuc "github.com/arrowwhi/kinolist/internal/usecase/collection"
 	directorsuc "github.com/arrowwhi/kinolist/internal/usecase/directors"
 	enrichmentuc "github.com/arrowwhi/kinolist/internal/usecase/enrichment"
@@ -107,10 +108,16 @@ func Run(ctx context.Context, envFile string) error {
 		Directors: postgres.NewDirectorRepository(txManager), Catalog: primaryCatalog, Tx: txManager,
 		WorksTTL: cfg.Directors.WorksTTL,
 	}
+	actorDeps := actorsuc.Deps{
+		Actors: postgres.NewActorRepository(txManager), Movies: movies, Catalog: primaryCatalog, Tx: txManager,
+		Titles: []actorsuc.TitleCatalog{primaryCatalog}, WorksTTL: cfg.Actors.WorksTTL,
+	}
 	if cfg.Kinopoisk.Enabled() {
 		kinopoiskClient := kinopoisk.New(cfg.Kinopoisk)
 		enrichDeps.Fallback = kinopoiskClient
 		directorDeps.Names = kinopoiskClient
+		actorDeps.Names = kinopoiskClient
+		actorDeps.Titles = append(actorDeps.Titles, kinopoiskClient)
 	} else {
 		logger.Warn(ctx).Msg("kinopoisk fallback is disabled: KINOPOISK_API_KEY is not set")
 	}
@@ -125,6 +132,7 @@ func Run(ctx context.Context, envFile string) error {
 	collectionUC := collectionuc.New(movies, users)
 	enrichmentUC := enrichmentuc.New(enrichDeps)
 	directorsUC := directorsuc.New(directorDeps)
+	actorsUC := actorsuc.New(actorDeps)
 
 	// --- telegram ---
 	bot, err := tg.New(botConfig(cfg),
@@ -159,6 +167,7 @@ func Run(ctx context.Context, envFile string) error {
 		Movies:      handler.NewMovie(collectionUC),
 		Jobs:        handler.NewEnrichment(enrichmentUC),
 		Directors:   handler.NewDirectors(directorsUC),
+		Actors:      handler.NewActors(actorsUC),
 		Health:      health,
 		WebAssets:   assets,
 		ResolveUser: resolveUserFunc(collectionUC),
@@ -176,6 +185,7 @@ func Run(ctx context.Context, envFile string) error {
 		httpComponent(server, health, cfg),
 		worker.New(enrichmentUC, notifier, m, cfg.Worker),
 		worker.NewDirectorSync(directorsUC, cfg.Directors.SyncInterval, cfg.Directors.SyncBatch),
+		worker.NewActorSync(actorsUC, cfg.Actors.SyncInterval, cfg.Actors.SyncBatch),
 		bot,
 	)
 }

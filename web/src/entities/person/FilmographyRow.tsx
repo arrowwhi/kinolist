@@ -1,16 +1,20 @@
-import type { FilmographyItem } from '../../api/directors'
+import type { FilmographyItem } from '../../api/people'
 import { Poster } from '../movie/Poster'
-export function FilmographyRow({
+import { workMeta } from './metadata'
+export function FilmographyRow<T extends FilmographyItem>({
   item,
+  meta = workMeta(item),
   adding,
   onOpen,
   onAdd,
 }: {
-  item: FilmographyItem
+  item: T
+  // Строка под названием; по умолчанию — как у режиссёра.
+  meta?: string
   adding: boolean
   // Своя работа открывает карточку коллекции, чужая — карточку каталога.
-  onOpen: (item: FilmographyItem) => void
-  onAdd: (item: FilmographyItem) => void
+  onOpen: (item: T) => void
+  onAdd: (item: T) => void
 }) {
   const owned = item.user_movie_id != null
   // Работу без TMDB id в коллекцию одной кнопкой не добавить.
@@ -22,19 +26,7 @@ export function FilmographyRow({
       <Poster url={item.poster_url} title={item.title} />
       <span className="film-row__body">
         <span className="film-row__title">{item.title}</span>
-        <span className="film-row__meta">
-          {[
-            item.year ?? 'Год неизвестен',
-            item.media_type === 'tv'
-              ? item.episode_count
-                ? `Сериал · ${item.episode_count} эп.`
-                : 'Сериал'
-              : 'Фильм',
-            item.original_title !== item.title ? item.original_title : '',
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        </span>
+        <span className="film-row__meta">{meta}</span>
         <span className="film-row__rating">
           {item.upcoming ? (
             <span className="film-row__tag">Скоро</span>

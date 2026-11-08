@@ -109,7 +109,7 @@ func (c *Client) Details(ctx context.Context, externalID int32, mediaTypes ...mo
 			}
 		}
 	}
-	c.loadDirectors(ctx, externalID, &d)
+	c.loadStaff(ctx, externalID, &d)
 	return d, nil
 }
 
@@ -152,29 +152,57 @@ func (c *Client) get(ctx context.Context, path string, params url.Values, out an
 	return nil
 }
 
-func (c *Client) loadDirectors(ctx context.Context, id int32, d *movie.Candidate) {
+// loadStaff заполняет режиссёров и актёрский состав из staff: Кинопоиск
+// отдаёт их одним списком в порядке титров.
+func (c *Client) loadStaff(ctx context.Context, id int32, d *movie.Candidate) {
 	var staff []struct {
-		ID         int32  `json:"staffId"`
-		NameRU     string `json:"nameRu"`
-		NameEN     string `json:"nameEn"`
-		Profession string `json:"professionKey"`
+		ID          int32  `json:"staffId"`
+		NameRU      string `json:"nameRu"`
+		NameEN      string `json:"nameEn"`
+		Description string `json:"description"`
+		PosterURL   string `json:"posterUrl"`
+		Profession  string `json:"professionKey"`
 	}
 	if err := c.get(ctx, "/api/v1/staff", url.Values{"filmId": {strconv.Itoa(int(id))}}, &staff); err != nil || staff == nil {
 		return
 	}
-	d.DirectorsLoaded = true
+	d.DirectorsLoaded, d.CastLoaded = true, true
 	d.Directors = make([]movie.Director, 0)
+	d.Cast = make([]movie.CastMember, 0)
 	seen := map[int32]bool{}
+	cast := map[int32]int{}
 	for _, p := range staff {
 		name := strings.TrimSpace(p.NameRU)
 		original := strings.TrimSpace(p.NameEN)
 		if name == "" {
 			name = original
 		}
-		if p.Profession != "DIRECTOR" || p.ID <= 0 || name == "" || seen[p.ID] {
+		if p.ID <= 0 || name == "" {
 			continue
 		}
-		seen[p.ID] = true
-		d.Directors = append(d.Directors, movie.Director{KinopoiskID: p.ID, Name: name, OriginalName: original})
+		switch p.Profession {
+		case "DIRECTOR":
+			if seen[p.ID] {
+				continue
+			}
+			seen[p.ID] = true
+			d.Directors = append(d.Directors, movie.Director{KinopoiskID: p.ID, Name: name, OriginalName: original})
+		case "ACTOR":
+			if i, ok := cast[p.ID]; ok {
+				d.Cast[i].Character = movie.JoinCharacters(d.Cast[i].Character, p.Description)
+				continue
+			}
+			if len(d.Cast) >= movie.MaxCast {
+				continue
+			}
+			if original == "" {
+				original = name
+			}
+			cast[p.ID] = len(d.Cast)
+			d.Cast = append(d.Cast, movie.CastMember{
+				KinopoiskID: p.ID, Name: name, OriginalName: original,
+				Character: movie.JoinCharacters(p.Description), ProfilePath: p.PosterURL,
+			})
+		}
 	}
 }

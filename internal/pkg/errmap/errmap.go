@@ -32,9 +32,11 @@ type entry struct {
 
 var table = []entry{
 	{movie.ErrDirectorNotFound, Response{http.StatusNotFound, "director_not_found", "Режиссёр не найден в коллекции"}},
-	{movie.ErrPersonNotFound, Response{http.StatusNotFound, "person_not_found", "Режиссёр не найден в каталоге"}},
-	{movie.ErrInvalidPersonID, Response{http.StatusBadRequest, "invalid_person_id", "Некорректный идентификатор режиссёра"}},
+	{movie.ErrActorNotFound, Response{http.StatusNotFound, "actor_not_found", "Актёр не найден"}},
+	{movie.ErrPersonNotFound, Response{http.StatusNotFound, "person_not_found", "Человек не найден в каталоге"}},
+	{movie.ErrInvalidPersonID, Response{http.StatusBadRequest, "invalid_person_id", "Некорректный идентификатор человека"}},
 	{movie.ErrInvalidDirectorFilter, Response{http.StatusBadRequest, "invalid_director_filter", "Некорректный фильтр режиссёров"}},
+	{movie.ErrInvalidActorFilter, Response{http.StatusBadRequest, "invalid_actor_filter", "Некорректный фильтр актёров"}},
 	{movie.ErrInvalidMediaType, Response{http.StatusBadRequest, "invalid_media_type", "Недопустимый тип: movie или tv"}},
 	{movie.ErrReviewTooLong, Response{http.StatusBadRequest, "review_too_long", "Отзыв не должен превышать 5000 символов"}},
 	{ErrBadRequest, Response{http.StatusBadRequest, "bad_request", "Некорректный запрос"}},

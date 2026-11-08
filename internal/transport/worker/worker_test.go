@@ -187,14 +187,23 @@ func (f fakeDirectorSync) SyncStale(_ context.Context, limit int) (int, error) {
 }
 
 func TestDirectorSyncRunsImmediatelyAndStops(t *testing.T) {
+	runSyncOnce(t, func(f fakeDirectorSync) *worker.PersonSync { return worker.NewDirectorSync(f, time.Hour, 7) }, 7)
+}
+
+func TestActorSyncRunsImmediatelyAndStops(t *testing.T) {
+	runSyncOnce(t, func(f fakeDirectorSync) *worker.PersonSync { return worker.NewActorSync(f, time.Hour, 5) }, 5)
+}
+
+func runSyncOnce(t *testing.T, newSync func(fakeDirectorSync) *worker.PersonSync, batch int) {
+	t.Helper()
 	calls := make(chan int, 4)
-	s := worker.NewDirectorSync(fakeDirectorSync{calls: calls}, time.Hour, 7)
+	s := newSync(fakeDirectorSync{calls: calls})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- s.Run(ctx) }()
 	select {
 	case limit := <-calls:
-		if limit != 7 {
+		if limit != batch {
 			t.Fatalf("limit = %d", limit)
 		}
 	case <-time.After(time.Second):

@@ -143,7 +143,7 @@ func (uc *UseCase) Search(ctx context.Context, userID int64, query string) ([]mo
 		out := make([]movie.PersonSearchResult, 0, len(items))
 		for _, d := range items {
 			out = append(out, movie.PersonSearchResult{
-				DirectorID: d.ID, Followed: d.Followed,
+				PersonID: d.ID, Followed: d.Followed,
 				Person: movie.Person{
 					TMDBID: d.TMDBID, KinopoiskID: d.KinopoiskID, Name: d.Name, OriginalName: d.OriginalName,
 					ProfilePath: d.ProfilePath, BirthDate: d.BirthDate, DeathDate: d.DeathDate,
@@ -173,7 +173,7 @@ func (uc *UseCase) Search(ctx context.Context, userID int64, query string) ([]mo
 	for _, p := range people {
 		r := movie.PersonSearchResult{Person: p}
 		if k, ok := known[p.TMDBID]; ok {
-			r.DirectorID, r.Followed = k.DirectorID, k.Followed
+			r.PersonID, r.Followed = k.PersonID, k.Followed
 			// В справочнике имя могло быть уже уточнено Кинопоиском.
 			if k.NameSource.Rank() > p.NameSource.Rank() {
 				r.Name, r.NameSource = k.Name, k.NameSource

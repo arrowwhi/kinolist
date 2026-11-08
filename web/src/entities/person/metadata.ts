@@ -1,7 +1,7 @@
-import type { DirectorOverview } from '../../api/directors'
+import type { FilmographyItem, PersonOverview } from '../../api/people'
 import { plural } from '../../shared/lib/format.ts'
 
-type Lifespan = Pick<DirectorOverview, 'birth_date' | 'death_date'>
+type Lifespan = Pick<PersonOverview, 'birth_date' | 'death_date'>
 
 function year(date?: string) {
   return date ? Number(date.slice(0, 4)) || 0 : 0
@@ -21,7 +21,7 @@ export function country(placeOfBirth?: string) {
 
 export function personLine(
   person: Lifespan &
-    Pick<DirectorOverview, 'name' | 'original_name' | 'place_of_birth'>,
+    Pick<PersonOverview, 'name' | 'original_name' | 'place_of_birth'>,
 ) {
   return [
     person.original_name !== person.name ? person.original_name : '',
@@ -42,4 +42,22 @@ export function filmCount(count: number) {
 
 export function progress(watched: number, total: number) {
   return total ? Math.round((watched / total) * 100) : 0
+}
+
+// Мета строки фильмографии режиссёра: «2024 · Фильм · Dune: Part Two».
+export function workMeta(item: FilmographyItem) {
+  return [
+    item.year ?? 'Год неизвестен',
+    mediaLabel(item),
+    item.original_title !== item.title ? item.original_title : '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
+export function mediaLabel(
+  item: Pick<FilmographyItem, 'media_type' | 'episode_count'>,
+) {
+  if (item.media_type !== 'tv') return 'Фильм'
+  return item.episode_count ? `Сериал · ${item.episode_count} эп.` : 'Сериал'
 }

@@ -140,10 +140,10 @@ func TestSearchMergesKnownDirectors(t *testing.T) {
 		{TMDBID: 1, Name: "Other"},
 	}, nil)
 	e.repo.EXPECT().KnownByTMDB(ctx, int64(1), []int32{525, 1}).Return(map[int32]movie.PersonSearchResult{
-		525: {DirectorID: 6, Followed: true, Person: movie.Person{TMDBID: 525, Name: "Кристофер Нолан", NameSource: movie.NameSourceKinopoisk}},
+		525: {PersonID: 6, Followed: true, Person: movie.Person{TMDBID: 525, Name: "Кристофер Нолан", NameSource: movie.NameSourceKinopoisk}},
 	}, nil)
 	got, err := e.uc.Search(ctx, 1, "nolan")
-	if err != nil || len(got) != 2 || got[0].DirectorID != 6 || !got[0].Followed || got[0].Name != "Кристофер Нолан" || got[1].DirectorID != 0 {
+	if err != nil || len(got) != 2 || got[0].PersonID != 6 || !got[0].Followed || got[0].Name != "Кристофер Нолан" || got[1].PersonID != 0 {
 		t.Fatalf("search: %+v %v", got, err)
 	}
 }
@@ -158,7 +158,7 @@ func TestSearchWithoutQuerySuggestsCollectionDirectors(t *testing.T) {
 		return []movie.DirectorOverview{{Director: movie.Director{ID: 5, TMDBID: 93183, Name: "Алексей Балабанов"}}}, 1, movie.DirectorScopeCounts{}, nil
 	})
 	got, err := e.uc.Search(ctx, 1, "")
-	if err != nil || len(got) != 1 || got[0].DirectorID != 5 || got[0].TMDBID != 93183 {
+	if err != nil || len(got) != 1 || got[0].PersonID != 5 || got[0].TMDBID != 93183 {
 		t.Fatalf("suggestions: %+v %v", got, err)
 	}
 }

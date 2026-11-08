@@ -1,14 +1,15 @@
 import { useState } from 'react'
-import { directorsApi } from '../../api/directors'
-import type { PersonSearchResult } from '../../api/directors'
+import type { PersonSearchResult } from '../../api/people'
+import { personPath } from '../../shared/lib/navigation'
 import type { Navigate } from '../../shared/lib/navigation'
+import type { PeopleSection } from '../../features/people/sections'
 import { Shell } from '../../widgets/app-shell/Shell'
 import { Field } from '../../shared/ui/Field'
 import { EmptyState, ErrorState, InlineError } from '../../shared/ui/Feedback'
 import { useResource } from '../../shared/hooks/useResource'
 import { useDebounced } from '../../shared/hooks/useDebounced'
 import { useMutation } from '../../shared/hooks/useMutation'
-import { DirectorAvatar } from '../../entities/director-v2/DirectorAvatar'
+import { PersonAvatar } from '../../entities/person/PersonAvatar'
 
 const departments: Record<string, string> = {
   Directing: 'Режиссёр',
@@ -29,22 +30,26 @@ function personMeta(person: PersonSearchResult) {
     .join(' · ')
 }
 
-export function AddDirectorPage({
+// Экраны «25 · Добавить режиссёра» и «32 · Добавить актёра».
+export function AddPersonPage({
+  section,
   initialQuery,
   navigate,
   back,
   changed,
 }: {
+  section: PeopleSection
   initialQuery: string
   navigate: Navigate
   back: () => void
   changed: (message: string) => void
 }) {
   const [search, setSearch] = useState(initialQuery)
+  const text = section.search
   const query = useDebounced(search).trim()
   const resource = useResource(
-    (signal) => directorsApi.search(query, signal),
-    query,
+    (signal) => section.api.search(query, signal),
+    `${section.kind}:${query}`,
   )
   // Локальные правки поверх выдачи по tmdb_id: заведённый id и подписка.
   const [local, setLocal] = useState<
@@ -65,10 +70,10 @@ export function AddDirectorPage({
         async () => {
           // Человека, которого ещё нет в справочнике, заводим и подписываем разом.
           if (current.id == null) {
-            const d = await directorsApi.followByTmdb(person.tmdb_id)
+            const d = await section.api.followByTmdb(person.tmdb_id)
             return d.id
           }
-          await directorsApi.follow(current.id, value)
+          await section.api.follow(current.id, value)
           return current.id
         },
         (id) => {
@@ -89,31 +94,31 @@ export function AddDirectorPage({
   const open = (person: PersonSearchResult) => {
     const current = state(person)
     if (current.id != null) {
-      navigate(`/v2/directors/${current.id}`)
+      navigate(personPath(section.kind, current.id))
       return
     }
     // Профиль строится по нашему id, поэтому сначала импортируем человека.
     setPending(person.tmdb_id)
     void action
       .execute(
-        () => directorsApi.importPerson(person.tmdb_id),
-        (d) => navigate(`/v2/directors/${d.id}`),
+        () => section.api.importPerson(person.tmdb_id),
+        (d) => navigate(personPath(section.kind, d.id)),
       )
       .finally(() => setPending(null))
   }
 
   return (
     <Shell
-      title="Добавить режиссёра"
-      subtitle="Найди автора по имени — покажем всю его фильмографию, даже то, чего ещё нет в коллекции."
+      title={text.title}
+      subtitle={text.subtitle}
       navigate={navigate}
       onBack={back}
     >
       <Field
         type="search"
         autoFocus
-        placeholder="Например, Вильнёв или Nolan"
-        aria-label="Имя режиссёра"
+        placeholder={text.placeholder}
+        aria-label={text.label}
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
@@ -121,10 +126,10 @@ export function AddDirectorPage({
         {query ? 'Результаты поиска' : 'Из твоей коллекции'}
       </p>
       {resource.loading ? (
-        <div className="person-list" role="status" aria-label="Ищем режиссёров">
+        <div className="person-list" role="status" aria-label={text.loading}>
           {[1, 2, 3].map((i) => (
             <div className="person-row person-row--skeleton" key={i}>
-              <span className="skeleton director-avatar director-avatar--md" />
+              <span className="skeleton person-avatar person-avatar--md" />
               <span className="person-row__body">
                 <span className="skeleton" />
                 <span className="skeleton" />
@@ -136,11 +141,11 @@ export function AddDirectorPage({
         <ErrorState message={resource.error} onRetry={resource.retry} />
       ) : !resource.data?.length ? (
         <EmptyState
-          title={query ? 'Никого не нашли' : 'Найди режиссёра по имени'}
+          title={query ? 'Никого не нашли' : text.emptyTitle}
           description={
             query
               ? 'Проверь написание или попробуй оригинальное имя латиницей.'
-              : 'Здесь появятся режиссёры фильмов из коллекции, на которых ты ещё не подписан.'
+              : text.emptyDescription
           }
         />
       ) : (
@@ -156,7 +161,7 @@ export function AddDirectorPage({
                   disabled={busy}
                   onClick={() => open(person)}
                 >
-                  <DirectorAvatar name={person.name} url={person.photo_url} />
+                  <PersonAvatar name={person.name} url={person.photo_url} />
                   <span className="person-row__body">
                     <strong>{person.name}</strong>
                     <span className="muted small">{personMeta(person)}</span>
@@ -194,6 +199,13 @@ export function AddDirectorPage({
         </ul>
       )}
       <InlineError message={action.error} />
+      {text.hint && resource.data?.length ? (
+        <p className="person-hint muted small">
+          {text.hint[0]}
+          <br />
+          {text.hint[1]}
+        </p>
+      ) : null}
     </Shell>
   )
 }

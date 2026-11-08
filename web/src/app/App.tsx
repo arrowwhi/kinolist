@@ -6,16 +6,16 @@ import { api } from '../api/client'
 import type { CollectionStatus } from '../features/collection/model'
 import { HomePage } from '../pages/home/HomePage'
 import { HomePageV2 } from '../pages/home/HomePageV2'
-import { MyDirectorsPage } from '../pages/directors-v2/MyDirectorsPage'
-import type { MyDirectorsPreferences } from '../pages/directors-v2/MyDirectorsPage'
-import {
-  DirectorProfilePage,
-  defaultFilmography,
-} from '../pages/directors-v2/DirectorProfilePage'
-import type { FilmographyPreferences } from '../pages/directors-v2/DirectorProfilePage'
-import { AddDirectorPage } from '../pages/directors-v2/AddDirectorPage'
+import { MyPeoplePage, defaultMyPeople } from '../pages/people/MyPeoplePage'
+import type { MyPeoplePreferences } from '../pages/people/MyPeoplePage'
+import { PersonProfilePage } from '../pages/people/PersonProfilePage'
+import { AddPersonPage } from '../pages/people/AddPersonPage'
+import { defaultFilmography } from '../features/people/filmography'
+import type { FilmographyPreferences } from '../features/people/filmography'
+import { peopleSections } from '../features/people/sections'
 import { home } from './route'
-import { parseCatalogRoute } from '../shared/lib/navigation'
+import { parseCatalogRoute, parsePeopleRoute } from '../shared/lib/navigation'
+import type { PersonKind } from '../shared/lib/navigation'
 import { useNavigation } from './navigation'
 import { Shell } from '../widgets/app-shell/Shell'
 import { useTelegramSetup } from '../shared/lib/telegram'
@@ -37,13 +37,12 @@ export function App() {
   const history = useRecentCandidates()
   const [directorPreferences, setDirectorPreferences] =
     useState<DirectorPreferences>({ search: '', sort: 'name' })
-  const [myDirectors, setMyDirectors] = useState<MyDirectorsPreferences>({
-    scope: 'all',
-    sort: 'name',
-    search: '',
-  })
+  // Настройки списков и фильмографий — отдельно для режиссёров и актёров.
+  const [myPeople, setMyPeople] = useState<
+    Record<PersonKind, MyPeoplePreferences>
+  >({ director: defaultMyPeople, actor: defaultMyPeople })
   const [filmography, setFilmography] = useState<
-    Record<number, FilmographyPreferences>
+    Record<string, FilmographyPreferences>
   >({})
   const [revision, setRevision] = useState(0)
   const [toast, setToast] = useState('')
@@ -66,47 +65,58 @@ export function App() {
   const routeMatch = path.match(/^\/movie\/(\d+)(?:\/(note|rate))?$/)
   const directorMatch = path.match(/^\/directors\/(\d+)$/)
   const genreMatch = path.match(/^\/genres\/(\d+)$/)
-  const directorV2Match = path.match(/^\/v2\/directors\/(\d+)$/)
+  const peopleRoute = parsePeopleRoute(path)
   const catalogRoute = parseCatalogRoute(location)
   let content
   if (path === home)
     content = <HomePage navigate={navigate} revision={revision} />
   else if (path === '/v2')
     content = <HomePageV2 navigate={navigate} revision={revision} />
-  else if (path === '/v2/directors')
-    content = (
-      <MyDirectorsPage
-        value={myDirectors}
-        onChange={setMyDirectors}
-        revision={revision}
-        navigate={navigate}
-        back={goHome}
-      />
-    )
-  else if (path === '/v2/directors/add')
-    content = (
-      <AddDirectorPage
-        initialQuery={params.get('q') ?? ''}
-        navigate={navigate}
-        back={back}
-        changed={changed}
-      />
-    )
-  else if (directorV2Match && Number(directorV2Match[1]) > 0) {
-    const id = Number(directorV2Match[1])
-    content = (
-      <DirectorProfilePage
-        key={id}
-        id={id}
-        preferences={filmography[id] ?? defaultFilmography}
-        onPreferences={(value) =>
-          setFilmography((previous) => ({ ...previous, [id]: value }))
-        }
-        navigate={navigate}
-        back={back}
-        changed={changed}
-      />
-    )
+  else if (peopleRoute) {
+    const { kind } = peopleRoute
+    const section = peopleSections[kind]
+    if (peopleRoute.page === 'list')
+      content = (
+        <MyPeoplePage
+          key={kind}
+          section={section}
+          value={myPeople[kind]}
+          onChange={(value) =>
+            setMyPeople((previous) => ({ ...previous, [kind]: value }))
+          }
+          revision={revision}
+          navigate={navigate}
+          back={goHome}
+        />
+      )
+    else if (peopleRoute.page === 'add')
+      content = (
+        <AddPersonPage
+          key={kind}
+          section={section}
+          initialQuery={params.get('q') ?? ''}
+          navigate={navigate}
+          back={back}
+          changed={changed}
+        />
+      )
+    else {
+      const key = `${kind}:${peopleRoute.id}`
+      content = (
+        <PersonProfilePage
+          key={key}
+          section={section}
+          id={peopleRoute.id}
+          preferences={filmography[key] ?? defaultFilmography}
+          onPreferences={(value) =>
+            setFilmography((previous) => ({ ...previous, [key]: value }))
+          }
+          navigate={navigate}
+          back={back}
+          changed={changed}
+        />
+      )
+    }
   } else if (catalogRoute)
     content = (
       <CatalogMoviePage

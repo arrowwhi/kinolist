@@ -43,7 +43,7 @@ func Genres(genres []movie.Genre) []dto.Genre {
 
 func Movie(m movie.Movie) dto.Movie {
 	return dto.Movie{
-		Directors: Directors(m.Directors),
+		Directors: Directors(m.Directors), Cast: Cast(m.Cast),
 		MediaType: string(m.MediaType.Normalize()), SeasonCount: m.SeasonCount,
 		ID: m.ID, TMDBID: m.TMDBID, KinopoiskID: m.KinopoiskID,
 		Title: m.Title, OriginalTitle: m.OriginalTitle, Year: m.Year,
@@ -79,7 +79,7 @@ func MovieList(p collection.Page) dto.MovieList {
 
 func Candidate(c movie.Candidate) dto.Candidate {
 	return dto.Candidate{
-		Directors: Directors(c.Directors),
+		Directors: Directors(c.Directors), Cast: Cast(c.Cast),
 		MediaType: string(c.MediaType.Normalize()), SeasonCount: c.SeasonCount,
 		Provider: string(c.Provider), ExternalID: c.ExternalID,
 		Title: c.Title, Year: c.Year, Overview: c.Overview,
@@ -119,6 +119,17 @@ func Directors(items []movie.Director) []dto.Director {
 	out := make([]dto.Director, 0, len(items))
 	for _, d := range items {
 		out = append(out, dto.Director{ID: d.ID, TMDBID: d.TMDBID, KinopoiskID: d.KinopoiskID, Name: d.Name, OriginalName: d.OriginalName})
+	}
+	return out
+}
+
+func Cast(items []movie.CastMember) []dto.CastMember {
+	out := make([]dto.CastMember, 0, len(items))
+	for _, c := range items {
+		out = append(out, dto.CastMember{
+			ID: c.ID, TMDBID: c.TMDBID, KinopoiskID: c.KinopoiskID, Name: c.Name, OriginalName: c.OriginalName,
+			Character: c.Character, PhotoURL: PosterURL(c.ProfilePath),
+		})
 	}
 	return out
 }

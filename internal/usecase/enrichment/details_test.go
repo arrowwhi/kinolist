@@ -23,6 +23,8 @@ func TestCandidateDetailsScopedAndCachedForConfirm(t *testing.T) {
 	chosen.RuntimeMin = 166
 	chosen.DirectorsLoaded = true
 	chosen.Directors = []movie.Director{{TMDBID: 17, Name: "Дени Вильнёв", OriginalName: "Denis Villeneuve"}}
+	chosen.CastLoaded = true
+	chosen.Cast = []movie.CastMember{{TMDBID: 1190668, Name: "Timothée Chalamet", OriginalName: "Timothée Chalamet", Character: "Paul Atreides"}}
 	chosen.Rating = 8.5
 	chosen.RatingProvider = movie.ProviderTMDB
 	chosen.RatingVoteCount = &votes
@@ -33,7 +35,7 @@ func TestCandidateDetailsScopedAndCachedForConfirm(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.RuntimeMin != 166 || got.RatingVoteCount == nil || *got.RatingVoteCount != 150 {
+	if got.RuntimeMin != 166 || got.RatingVoteCount == nil || *got.RatingVoteCount != 150 || len(got.Cast) != 1 {
 		t.Fatalf("details: %+v", got)
 	}
 	d.tx.EXPECT().BeginTransaction(gomock.Any()).DoAndReturn(func(ctx context.Context) (context.Context, error) { return ctx, nil })
@@ -41,6 +43,10 @@ func TestCandidateDetailsScopedAndCachedForConfirm(t *testing.T) {
 	d.movies.EXPECT().Upsert(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, m movie.Movie) (movie.Movie, error) {
 		if !m.DirectorsLoaded || len(m.Directors) != 1 || m.Directors[0].TMDBID != 17 {
 			t.Fatalf("directors lost: %+v", m)
+		}
+		// Состав сохраняется тем же Upsert внутри транзакции подтверждения.
+		if !m.CastLoaded || len(m.Cast) != 1 || m.Cast[0].Character != "Paul Atreides" {
+			t.Fatalf("cast lost: %+v", m)
 		}
 		if m.RuntimeMin != 166 {
 			t.Fatalf("runtime: %d", m.RuntimeMin)
@@ -89,7 +95,7 @@ func TestPartialDirectorDetailsAreRetried(t *testing.T) {
 	d.primary.EXPECT().Provider().Return(movie.ProviderTMDB).Times(2)
 	d.primary.EXPECT().Details(gomock.Any(), int32(123), movie.MediaMovie).Return(chosen, nil)
 	loaded := chosen
-	loaded.DirectorsLoaded = true
+	loaded.DirectorsLoaded, loaded.CastLoaded = true, true
 	loaded.Directors = []movie.Director{{TMDBID: 17, Name: "Denis"}}
 	d.primary.EXPECT().Details(gomock.Any(), int32(123), movie.MediaMovie).Return(loaded, nil)
 	d.movies.EXPECT().GenresByTMDBIDs(gomock.Any(), []int32{18}).Return([]movie.Genre{{ID: 18}}, nil).Times(2)
@@ -99,6 +105,28 @@ func TestPartialDirectorDetailsAreRetried(t *testing.T) {
 	}
 	second, err := u.CandidateDetails(context.Background(), 7, 1, movie.ProviderTMDB, 123)
 	if err != nil || !second.DirectorsLoaded || len(second.Directors) != 1 {
+		t.Fatalf("retry: %+v %v", second, err)
+	}
+}
+
+func TestPartialCastDetailsAreRetried(t *testing.T) {
+	u, d := newUseCase(t, false)
+	chosen := candidate(123, "Dune", "Dune", 2021)
+	job := domain.Job{ID: 1, UserID: 7, Status: domain.StatusConfirming, Candidates: []movie.Candidate{chosen}}
+	d.jobs.EXPECT().GetForUser(gomock.Any(), int64(7), int64(1)).Return(job, nil).Times(2)
+	d.primary.EXPECT().Provider().Return(movie.ProviderTMDB).Times(2)
+	partial := chosen
+	partial.DirectorsLoaded = true
+	d.primary.EXPECT().Details(gomock.Any(), int32(123), movie.MediaMovie).Return(partial, nil)
+	loaded := partial
+	loaded.CastLoaded = true
+	loaded.Cast = []movie.CastMember{{TMDBID: 1, Name: "Actor"}}
+	d.primary.EXPECT().Details(gomock.Any(), int32(123), movie.MediaMovie).Return(loaded, nil)
+	d.movies.EXPECT().GenresByTMDBIDs(gomock.Any(), []int32{18}).Return([]movie.Genre{{ID: 18}}, nil).Times(2)
+	if first, err := u.CandidateDetails(context.Background(), 7, 1, movie.ProviderTMDB, 123); err != nil || first.CastLoaded {
+		t.Fatalf("partial: %+v %v", first, err)
+	}
+	if second, err := u.CandidateDetails(context.Background(), 7, 1, movie.ProviderTMDB, 123); err != nil || !second.CastLoaded || len(second.Cast) != 1 {
 		t.Fatalf("retry: %+v %v", second, err)
 	}
 }

@@ -1,6 +1,6 @@
 // Каталог (TMDB/Кинопоиск) вне коллекции: карточка тайтла и добавление
 // его в коллекцию без задачи распознавания.
-import { request } from './client'
+import { request } from './client.ts'
 import type { CatalogMovie, MediaType, Status, UserMovie } from './types'
 
 export type CatalogProvider = 'tmdb' | 'kinopoisk'

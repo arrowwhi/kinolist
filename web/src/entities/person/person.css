@@ -1,4 +1,4 @@
-/* Новый раздел режиссёров (v2): подписки, профиль, фильмография. */
+/* Разделы «Мои режиссёры» и «Мои актёры»: подписки, профиль, фильмография. */
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -30,27 +30,32 @@
 }
 
 /* Аватар: фото из каталога или инициалы на цветной подложке. */
-.director-avatar {
+.person-avatar {
   flex-shrink: 0;
   border-radius: 50%;
   object-fit: cover;
 }
-.director-avatar--sm {
+.person-avatar--sm {
   width: 40px;
   height: 40px;
   font-size: 14px;
 }
-.director-avatar--md {
+.person-avatar--md {
   width: 52px;
   height: 52px;
   font-size: 17px;
 }
-.director-avatar--lg {
+.person-avatar--cast {
+  width: 56px;
+  height: 56px;
+  font-size: 17px;
+}
+.person-avatar--lg {
   width: 96px;
   height: 96px;
   font-size: 30px;
 }
-.director-avatar--initials {
+.person-avatar--initials {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -59,14 +64,14 @@
   letter-spacing: 0.5px;
 }
 
-.director-progress {
+.person-progress {
   display: block;
   height: 6px;
   border-radius: 99px;
   background: var(--color-raised);
   overflow: hidden;
 }
-.director-progress > span {
+.person-progress > span {
   display: block;
   height: 100%;
   border-radius: inherit;
@@ -75,7 +80,7 @@
 }
 
 /* Карточка в списке «Мои режиссёры». */
-.director-overview {
+.person-overview {
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -85,34 +90,34 @@
   background: var(--color-surface);
   text-align: left;
 }
-.director-overview:active {
+.person-overview:active {
   opacity: 0.85;
 }
-.director-overview__head {
+.person-overview__head {
   display: flex;
   align-items: center;
   gap: 14px;
   min-width: 0;
 }
-.director-overview__name {
+.person-overview__name {
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
   flex: 1;
 }
-.director-overview__name > strong {
+.person-overview__name > strong {
   font-size: 17px;
   font-weight: 600;
   line-height: 1.35;
 }
-.director-overview__name > span {
+.person-overview__name > span {
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.director-badge {
+.person-badge {
   flex-shrink: 0;
   width: 28px;
   height: 28px;
@@ -125,31 +130,31 @@
   font-size: 13px;
   font-weight: 700;
 }
-.director-overview__progress {
+.person-overview__progress {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.director-overview__progress-label {
+.person-overview__progress-label {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
 }
-.director-overview__meta {
+.person-overview__meta {
   font-size: 12px;
   color: var(--color-accent);
 }
-[data-theme='light'] .director-overview__meta {
+[data-theme='light'] .person-overview__meta {
   color: var(--color-text);
 }
 
 /* Профиль режиссёра. */
-.director-hero {
+.person-hero {
   display: flex;
   gap: 18px;
   align-items: flex-start;
 }
-.director-hero__body {
+.person-hero__body {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -157,11 +162,11 @@
   gap: 8px;
   line-height: 1.5;
 }
-.director-hero__follow {
+.person-hero__follow {
   margin-top: 6px;
   min-height: 44px;
 }
-.director-summary {
+.person-summary {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -169,40 +174,40 @@
   border-radius: var(--radius-md);
   background: var(--color-surface);
 }
-.director-summary__line {
+.person-summary__line {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   font-size: 15px;
 }
-.director-summary__stats {
+.person-summary__stats {
   margin: 6px 0 0;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
-.director-summary__stats > div {
+.person-summary__stats > div {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
-.director-summary__stats dt {
+.person-summary__stats dt {
   order: 1;
   font-size: 11px;
   color: var(--color-muted);
 }
-.director-summary__stats dd {
+.person-summary__stats dd {
   margin: 0;
   font-size: 22px;
   font-weight: 600;
   line-height: 1.3;
   font-variant-numeric: tabular-nums;
 }
-.director-bio {
+.person-bio {
   font-size: 13px;
   line-height: 1.6;
 }
-.director-bio--clamped {
+.person-bio--clamped {
   display: -webkit-box;
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
@@ -404,4 +409,10 @@
 }
 .person-row--skeleton .person-row__body .skeleton:nth-child(2) {
   width: 60%;
+}
+.person-hint {
+  padding: 14px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  line-height: 1.6;
 }

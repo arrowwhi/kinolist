@@ -18,6 +18,12 @@ const paramLanguage = "language"
 // SearchPeople ищет людей по имени. Режиссёры идут первыми, но остальные
 // не отбрасываются: у многих режиссёров в TMDB основной департамент «Acting».
 func (c *Client) SearchPeople(ctx context.Context, query string) ([]movie.Person, error) {
+	return c.SearchPeopleByDepartment(ctx, query, movie.DirectingDepartment)
+}
+
+// SearchPeopleByDepartment ищет людей по имени и ставит первыми тех, чей
+// known_for_department равен department; порядок TMDB внутри групп сохраняется.
+func (c *Client) SearchPeopleByDepartment(ctx context.Context, query, department string) ([]movie.Person, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, movie.ErrEmptyQuery
@@ -34,14 +40,14 @@ func (c *Client) SearchPeople(ctx context.Context, query string) ([]movie.Person
 		}
 	}
 	sort.SliceStable(people, func(i, j int) bool {
-		return people[i].KnownForDepartment == movie.DirectingDepartment &&
-			people[j].KnownForDepartment != movie.DirectingDepartment
+		return people[i].KnownForDepartment == department && people[j].KnownForDepartment != department
 	})
 	return people, nil
 }
 
-// PersonDetails загружает человека, его режиссёрские работы и переводы
-// биографии одним запросом.
+// PersonDetails загружает человека, его режиссёрские работы, актёрские роли
+// и переводы биографии одним запросом — общий для обоих разделов (и общий
+// ключ кэша).
 func (c *Client) PersonDetails(ctx context.Context, tmdbID int32) (movie.PersonDetails, error) {
 	if tmdbID <= 0 {
 		return movie.PersonDetails{}, movie.ErrInvalidPersonID
@@ -113,6 +119,7 @@ type personDetailsResponse struct {
 	Deathday        string   `json:"deathday"`
 	PlaceOfBirth    string   `json:"place_of_birth"`
 	CombinedCredits *struct {
+		Cast []personCredit `json:"cast"`
 		Crew []personCredit `json:"crew"`
 	} `json:"combined_credits"`
 	Translations *struct {
@@ -141,6 +148,8 @@ type personCredit struct {
 	VoteCount     int32           `json:"vote_count"`
 	EpisodeCount  int32           `json:"episode_count"`
 	Video         bool            `json:"video"`
+	Character     string          `json:"character"`
+	GenreIDs      []int32         `json:"genre_ids"`
 }
 
 func (d personDetailsResponse) toDetails(now time.Time) movie.PersonDetails {
@@ -153,12 +162,13 @@ func (d personDetailsResponse) toDetails(now time.Time) movie.PersonDetails {
 	p.PlaceOfBirth = strings.TrimSpace(d.PlaceOfBirth)
 	p.Biography, p.BiographyLang = biography(d)
 
-	var works []movie.DirectorWork
+	var works, roles []movie.DirectorWork
 	if d.CombinedCredits != nil {
 		works = directorWorks(d.CombinedCredits.Crew)
+		roles = actorRoles(d.CombinedCredits.Cast)
 	}
 	p.KnownFor = knownFor(works, now)
-	return movie.PersonDetails{Person: p, Works: works}
+	return movie.PersonDetails{Person: p, Works: works, Roles: roles}
 }
 
 // russianName: перевод TMDB, затем кириллица из also_known_as, иначе латиница.
@@ -206,10 +216,49 @@ func biography(d personDetailsResponse) (string, string) {
 // directorWorks оставляет только режиссёрские работы: фильмы без видео-
 // релизов и сериалы, схлопнутые до одной записи на шоу.
 func directorWorks(crew []personCredit) []movie.DirectorWork {
+	return collectWorks(crew, func(c personCredit) bool { return c.Job == "Director" })
+}
+
+// Жанры TMDB, роли в которых не считаются актёрскими: ток-шоу, новости,
+// реалити.
+var nonActingGenres = map[int32]bool{10767: true, 10763: true, 10764: true}
+
+// actorRoles оставляет актёрские роли: без ток-шоу, новостей, реалити и
+// появлений «в роли себя». Эпизоды сериала и несколько персонажей одной
+// работы схлопываются в одну строку.
+func actorRoles(cast []personCredit) []movie.ActorWork {
+	return collectWorks(cast, func(c personCredit) bool {
+		for _, g := range c.GenreIDs {
+			if nonActingGenres[g] {
+				return false
+			}
+		}
+		return !playsSelf(c.Character)
+	})
+}
+
+// playsSelf распознаёт «Self», «Himself - Host», «Herself (archive footage)».
+func playsSelf(character string) bool {
+	character = strings.ToLower(strings.TrimSpace(character))
+	if strings.Contains(character, "самого себя") || strings.Contains(character, "саму себя") {
+		return true
+	}
+	first, _, _ := strings.Cut(strings.TrimLeft(character, "( "), " ")
+	first = strings.TrimRight(first, ",-–—:;()")
+	switch first {
+	case "self", "himself", "herself", "themselves", "themself":
+		return true
+	}
+	return false
+}
+
+// collectWorks — общие для режиссёров и актёров правила: без видеорелизов,
+// без безымянных и заброшенных проектов, одна строка на работу.
+func collectWorks(credits []personCredit, accept func(personCredit) bool) []movie.DirectorWork {
 	out := make([]movie.DirectorWork, 0)
 	index := map[string]int{}
-	for _, c := range crew {
-		if c.Job != "Director" || c.Video || c.ID <= 0 || !c.MediaType.Valid() {
+	for _, c := range credits {
+		if c.Video || c.ID <= 0 || !c.MediaType.Valid() || !accept(c) {
 			continue
 		}
 		title, original, date := c.Title, c.OriginalTitle, c.ReleaseDate
@@ -231,11 +280,13 @@ func directorWorks(crew []personCredit) []movie.DirectorWork {
 				episodes := c.EpisodeCount
 				out[i].EpisodeCount = &episodes
 			}
+			out[i].Character = movie.JoinCharacters(out[i].Character, c.Character)
 			continue
 		}
 		w := movie.DirectorWork{
 			MediaType: c.MediaType, TMDBID: c.ID, Title: title, OriginalTitle: strings.TrimSpace(original),
 			ReleaseDate: parseDate(date), Year: parseYear(date), PosterPath: c.PosterPath, VoteCount: c.VoteCount,
+			Character: movie.JoinCharacters(c.Character),
 		}
 		if c.VoteCount >= movie.MinVotesForRating && c.VoteAverage > 0 {
 			rating := float64(int(c.VoteAverage*10+0.5)) / 10

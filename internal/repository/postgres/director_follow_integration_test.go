@@ -130,7 +130,7 @@ func TestDirectorFollowsFilmographyAndNameMerge(t *testing.T) {
 	}
 
 	known, err := repo.KnownByTMDB(ctx, other.ID, []int32{137427, 525})
-	if err != nil || len(known) != 1 || known[137427].DirectorID != id || !known[137427].Followed {
+	if err != nil || len(known) != 1 || known[137427].PersonID != id || !known[137427].Followed {
 		t.Fatalf("known: %+v %v", known, err)
 	}
 

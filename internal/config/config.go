@@ -18,6 +18,7 @@ type Config struct {
 	Telegram  Telegram
 	Worker    Worker
 	Directors Directors
+	Actors    Actors
 	TMDB      TMDB
 	Kinopoisk Kinopoisk
 	Instagram Instagram
@@ -93,6 +94,13 @@ type Worker struct {
 
 // Directors — фоновое обновление фильмографий отслеживаемых режиссёров.
 type Directors struct {
+	WorksTTL     time.Duration
+	SyncInterval time.Duration
+	SyncBatch    int
+}
+
+// Actors — фоновое обновление ролей актёров и догрузка состава старых работ.
+type Actors struct {
 	WorksTTL     time.Duration
 	SyncInterval time.Duration
 	SyncBatch    int
@@ -182,6 +190,11 @@ func Load(path string) (*Config, error) {
 			WorksTTL:     p.duration("DIRECTOR_WORKS_TTL", 7*24*time.Hour),
 			SyncInterval: p.duration("DIRECTOR_SYNC_INTERVAL", 30*time.Minute),
 			SyncBatch:    p.int("DIRECTOR_SYNC_BATCH", 20),
+		},
+		Actors: Actors{
+			WorksTTL:     p.duration("ACTOR_WORKS_TTL", 7*24*time.Hour),
+			SyncInterval: p.duration("ACTOR_SYNC_INTERVAL", 30*time.Minute),
+			SyncBatch:    p.int("ACTOR_SYNC_BATCH", 20),
 		},
 		TMDB: TMDB{
 			APIKey:   p.str("TMDB_API_KEY", ""),

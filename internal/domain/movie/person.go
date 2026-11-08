@@ -67,6 +67,8 @@ type DirectorWork struct {
 	Rating        *float64
 	VoteCount     int32
 	EpisodeCount  *int32
+	// Character — персонаж; заполняется только у ролей актёра.
+	Character string
 }
 
 // Upcoming — работа ещё не вышла или дата выхода неизвестна.
@@ -87,10 +89,12 @@ func IsUpcoming(releaseDate *time.Time, year int16, now time.Time) bool {
 // у малоизвестных работ средняя из пары оценок ничего не говорит.
 const MinVotesForRating = 20
 
-// PersonDetails — человек и его режиссёрские работы.
+// PersonDetails — человек, его режиссёрские работы и актёрские роли:
+// TMDB отдаёт и то и другое одним запросом.
 type PersonDetails struct {
 	Person
 	Works []DirectorWork
+	Roles []ActorWork
 }
 
 // DirectorScope — какие режиссёры попадают в список «Мои режиссёры».
@@ -172,7 +176,8 @@ type DirectorScopeCounts struct {
 	Collection int
 }
 
-// FilmographyItem — работа режиссёра с пометками коллекции пользователя.
+// FilmographyItem — работа режиссёра (или роль актёра) с пометками
+// коллекции пользователя.
 type FilmographyItem struct {
 	DirectorWork
 	MovieID     int64
@@ -198,12 +203,12 @@ type DirectorSyncState struct {
 	SyncedAt   *time.Time
 }
 
-// PersonSearchResult — человек из поиска; DirectorID равен 0, если его
-// ещё нет в общем справочнике режиссёров.
+// PersonSearchResult — человек из поиска; PersonID — id в справочнике
+// раздела (режиссёров или актёров), 0 — человек там ещё не заведён.
 type PersonSearchResult struct {
 	Person
-	DirectorID int64
-	Followed   bool
+	PersonID int64
+	Followed bool
 }
 
 // HasCyrillic отличает русское написание имени от латиницы.

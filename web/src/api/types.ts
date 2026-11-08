@@ -28,10 +28,24 @@ export interface DirectorList {
   limit: number
   offset: number
 }
+// Участник блока «В ролях» карточки. В предпросмотре и карточке каталога
+// внутреннего id может не быть — тогда профиль открывается через import.
+export interface CastMember {
+  id?: number
+  tmdb_id?: number
+  kinopoisk_id?: number
+  name: string
+  original_name: string
+  // Пустая строка, если персонаж неизвестен.
+  character: string
+  photo_url?: string
+}
 export type DirectorSelection = Pick<DirectorStats, 'id' | 'name'>
 
 export interface Movie {
   directors?: Director[]
+  // Первые 10 актёров в порядке титров; в старых ответах поля нет.
+  cast?: CastMember[]
   media_type?: MediaType
   season_count?: number | null
   id: number
@@ -86,6 +100,7 @@ export interface MovieList {
 
 export interface Candidate {
   directors?: Director[]
+  cast?: CastMember[]
   media_type?: MediaType
   season_count?: number | null
   original_title?: string

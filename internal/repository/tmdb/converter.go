@@ -2,6 +2,7 @@ package tmdb
 
 import (
 	"io"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -83,6 +84,9 @@ func (d detailsResponse) toCandidate() movie.Candidate {
 	if credits != nil && credits.Crew != nil {
 		c.Directors, c.DirectorsLoaded = credits.directors(c.MediaType), true
 	}
+	if credits != nil && credits.Cast != nil {
+		c.Cast, c.CastLoaded = credits.cast(), true
+	}
 	if c.MediaType == movie.MediaTV {
 		// Season zero contains specials, not an ordinary season.
 		if len(d.Seasons) > 0 {
@@ -130,7 +134,21 @@ func parseYear(releaseDate string) int16 {
 }
 
 // A missing crew array is a partial/error response, not an authoritative empty list.
+// То же для cast: нет массива — состав неизвестен, пустой массив — состава нет.
 type creditsResponse struct {
+	// Cast у фильма — credits.cast с character, у сериала — aggregate_credits.cast
+	// с ролями всех сезонов в roles.
+	Cast []struct {
+		ID           int32  `json:"id"`
+		Name         string `json:"name"`
+		OriginalName string `json:"original_name"`
+		Character    string `json:"character"`
+		ProfilePath  string `json:"profile_path"`
+		Order        int    `json:"order"`
+		Roles        []struct {
+			Character string `json:"character"`
+		} `json:"roles"`
+	} `json:"cast"`
 	Crew []struct {
 		ID           int32  `json:"id"`
 		Name         string `json:"name"`
@@ -167,6 +185,51 @@ func (c creditsResponse) directors(mt movie.MediaType) []movie.Director {
 			original = name
 		}
 		out = append(out, movie.Director{TMDBID: person.ID, Name: name, OriginalName: original})
+	}
+	return out
+}
+
+// cast — первые movie.MaxCast актёров в порядке титров. Один человек с
+// несколькими персонажами — одна строка с персонажами через « / ».
+func (c creditsResponse) cast() []movie.CastMember {
+	type entry struct {
+		member movie.CastMember
+		order  int
+	}
+	entries := make([]entry, 0, len(c.Cast))
+	index := map[int32]int{}
+	for _, person := range c.Cast {
+		name := strings.TrimSpace(person.Name)
+		original := strings.TrimSpace(person.OriginalName)
+		if name == "" {
+			name = original
+		}
+		if person.ID <= 0 || name == "" {
+			continue
+		}
+		if original == "" {
+			original = name
+		}
+		characters := make([]string, 0, 1+len(person.Roles))
+		characters = append(characters, person.Character)
+		for _, role := range person.Roles {
+			characters = append(characters, role.Character)
+		}
+		if i, ok := index[person.ID]; ok {
+			prev := entries[i].member.Character
+			entries[i].member.Character = movie.JoinCharacters(append([]string{prev}, characters...)...)
+			continue
+		}
+		index[person.ID] = len(entries)
+		entries = append(entries, entry{order: person.Order, member: movie.CastMember{
+			TMDBID: person.ID, Name: name, OriginalName: original,
+			Character: movie.JoinCharacters(characters...), ProfilePath: person.ProfilePath,
+		}})
+	}
+	sort.SliceStable(entries, func(i, j int) bool { return entries[i].order < entries[j].order })
+	out := make([]movie.CastMember, 0, min(len(entries), movie.MaxCast))
+	for i := 0; i < len(entries) && i < movie.MaxCast; i++ {
+		out = append(out, entries[i].member)
 	}
 	return out
 }

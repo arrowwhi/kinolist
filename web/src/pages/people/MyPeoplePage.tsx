@@ -1,6 +1,7 @@
-import { directorsApi } from '../../api/directors'
-import type { MyDirectorsScope, MyDirectorsSort } from '../../api/directors'
+import type { MyPeopleScope, MyPeopleSort } from '../../api/people'
+import { addPersonPath, personPath } from '../../shared/lib/navigation'
 import type { Navigate } from '../../shared/lib/navigation'
+import type { PeopleSection } from '../../features/people/sections'
 import { Shell } from '../../widgets/app-shell/Shell'
 import { Field } from '../../shared/ui/Field'
 import { Chip } from '../../shared/ui/Chip'
@@ -8,56 +9,63 @@ import { Button } from '../../shared/ui/Button'
 import { EmptyState, ErrorState, SkeletonList } from '../../shared/ui/Feedback'
 import { useResource } from '../../shared/hooks/useResource'
 import { useDebounced } from '../../shared/hooks/useDebounced'
-import { DirectorOverviewCard } from '../../entities/director-v2/DirectorOverviewCard'
-import { directorCount } from '../../entities/director/metadata'
+import { PersonOverviewCard } from '../../entities/person/PersonOverviewCard'
 
-export type { MyDirectorsScope, MyDirectorsSort }
-export interface MyDirectorsPreferences {
-  scope: MyDirectorsScope
-  sort: MyDirectorsSort
+export interface MyPeoplePreferences {
+  scope: MyPeopleScope
+  sort: MyPeopleSort
   search: string
 }
+export const defaultMyPeople: MyPeoplePreferences = {
+  scope: 'all',
+  sort: 'name',
+  search: '',
+}
 
-export function MyDirectorsPage({
+// Экраны «22 · Мои режиссёры» и «30 · Мои актёры».
+export function MyPeoplePage({
+  section,
   value,
   onChange,
   revision,
   navigate,
   back,
 }: {
-  value: MyDirectorsPreferences
-  onChange: (value: MyDirectorsPreferences) => void
+  section: PeopleSection
+  value: MyPeoplePreferences
+  onChange: (value: MyPeoplePreferences) => void
   revision: number
   navigate: Navigate
   back: () => void
 }) {
+  const text = section.list
   const query = useDebounced(value.search).trim()
   const resource = useResource(
     (signal) =>
-      directorsApi.myDirectors(
+      section.api.myPeople(
         { scope: value.scope, sort: value.sort, query },
         signal,
       ),
-    JSON.stringify([value.scope, value.sort, query, revision]),
+    JSON.stringify([section.kind, value.scope, value.sort, query, revision]),
   )
   const counts = resource.data?.counts
   const visible = resource.data?.items ?? []
   return (
     <Shell
-      title="Режиссёры"
-      subtitle="Следи за любимыми авторами и смотри их фильмографию целиком."
+      title={text.title}
+      subtitle={text.subtitle}
       navigate={navigate}
       onBack={back}
       floating={
         <Button
           className="button--pill"
-          onClick={() => navigate('/v2/directors/add')}
+          onClick={() => navigate(addPersonPath(section.kind))}
         >
-          ＋ Добавить режиссёра
+          {text.add}
         </Button>
       }
     >
-      <div className="chips" role="group" aria-label="Какие режиссёры">
+      <div className="chips" role="group" aria-label={text.scopeLabel}>
         {(
           [
             { key: 'all', label: 'Все', count: counts?.all },
@@ -81,12 +89,12 @@ export function MyDirectorsPage({
       </div>
       <Field
         type="search"
-        placeholder="Поиск среди моих режиссёров"
-        aria-label="Поиск среди моих режиссёров"
+        placeholder={text.searchPlaceholder}
+        aria-label={text.searchPlaceholder}
         value={value.search}
         onChange={(e) => onChange({ ...value, search: e.target.value })}
       />
-      <div className="chips" role="group" aria-label="Сортировка режиссёров">
+      <div className="chips" role="group" aria-label={text.sortLabel}>
         {(
           [
             { key: 'name', label: 'По имени' },
@@ -104,10 +112,7 @@ export function MyDirectorsPage({
         ))}
       </div>
       {value.scope === 'collection' && resource.data && (
-        <p className="muted small">
-          Режиссёры фильмов из твоей коллекции. Отметь «Отслеживать» в профиле,
-          чтобы закрепить автора.
-        </p>
+        <p className="muted small">{text.collectionHint}</p>
       )}
       {resource.loading ? (
         <SkeletonList />
@@ -117,36 +122,30 @@ export function MyDirectorsPage({
         <EmptyState
           title={
             query
-              ? 'Режиссёр не найден'
+              ? text.notFound
               : value.scope === 'followed'
-                ? 'Пока никого не отслеживаешь'
-                : 'Здесь будут твои режиссёры'
+                ? text.emptyFollowed
+                : text.empty
           }
           description={
             query
               ? 'Попробуй русское или оригинальное имя — или найди его в каталоге.'
-              : 'Добавь режиссёра, чтобы видеть всю его фильмографию и что уже посмотрено.'
+              : text.emptyDescription
           }
-          action={query ? 'Искать в каталоге' : 'Добавить режиссёра'}
-          onAction={() =>
-            navigate(
-              query
-                ? `/v2/directors/add?q=${encodeURIComponent(query)}`
-                : '/v2/directors/add',
-            )
-          }
+          action={query ? 'Искать в каталоге' : text.addAction}
+          onAction={() => navigate(addPersonPath(section.kind, query))}
         />
       ) : (
         <>
           <p className="section-label" aria-live="polite">
-            {directorCount(resource.data?.total ?? visible.length)}
+            {text.count(resource.data?.total ?? visible.length)}
           </p>
           <div className="stack">
-            {visible.map((d) => (
-              <DirectorOverviewCard
-                key={d.id}
-                director={d}
-                onOpen={() => navigate(`/v2/directors/${d.id}`)}
+            {visible.map((person) => (
+              <PersonOverviewCard
+                key={person.id}
+                person={person}
+                onOpen={() => navigate(personPath(section.kind, person.id))}
               />
             ))}
           </div>

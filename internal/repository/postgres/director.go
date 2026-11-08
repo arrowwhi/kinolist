@@ -33,16 +33,16 @@ func (r *MovieRepository) replaceDirectors(ctx context.Context, movieID int64, d
 	for _, position := range positions {
 		d := directors[position]
 		var id int64
-		column, externalID := "tmdb_id", d.TMDBID
+		column, externalID := columnTMDBID, d.TMDBID
 		if externalID == 0 {
-			column, externalID = "kinopoisk_id", d.KinopoiskID
+			column, externalID = columnKinopoiskID, d.KinopoiskID
 		}
 		if externalID <= 0 || strings.TrimSpace(d.Name) == "" {
 			return fmt.Errorf("save director: invalid external identity or name")
 		}
 		// Кинопоиск отдаёт русские имена, TMDB в credits — обычно латиницу.
 		source := movie.NameSourceTMDB
-		if column == "kinopoisk_id" {
+		if column == columnKinopoiskID {
 			source = movie.NameSourceKinopoisk
 		}
 		// The conflict column comes only from the constants above. Names never merge identities.

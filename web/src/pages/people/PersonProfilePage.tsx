@@ -1,9 +1,19 @@
 import { useState } from 'react'
 import { RequestError } from '../../api/client'
-import { directorsApi, filmographyKey } from '../../api/directors'
-import type { FilmographyItem } from '../../api/directors'
+import { filmographyKey } from '../../api/people'
+import type { FilmographyItem } from '../../api/people'
 import { catalogPath } from '../../shared/lib/navigation'
 import type { Navigate } from '../../shared/lib/navigation'
+import type { PeopleSection } from '../../features/people/sections'
+import {
+  decade,
+  filterWorks,
+  sortWorks,
+} from '../../features/people/filmography'
+import type {
+  FilmographyPreferences,
+  FilmographySort,
+} from '../../features/people/filmography'
 import { Shell } from '../../widgets/app-shell/Shell'
 import { Chip } from '../../shared/ui/Chip'
 import { Button } from '../../shared/ui/Button'
@@ -17,28 +27,14 @@ import { useResource } from '../../shared/hooks/useResource'
 import { useMutation } from '../../shared/hooks/useMutation'
 import { haptic } from '../../shared/lib/telegram'
 import { personalAverage } from '../../entities/director/metadata'
-import { DirectorAvatar } from '../../entities/director-v2/DirectorAvatar'
-import { FilmographyRow } from '../../entities/director-v2/FilmographyRow'
-import { ProgressBar } from '../../entities/director-v2/ProgressBar'
+import { PersonAvatar } from '../../entities/person/PersonAvatar'
+import { FilmographyRow } from '../../entities/person/FilmographyRow'
+import { ProgressBar } from '../../entities/person/ProgressBar'
 import {
-  filmCount,
   personLine,
   progress,
   worksWatched,
-} from '../../entities/director-v2/metadata'
-
-export type FilmographyFilter = 'all' | 'watched' | 'want_to_watch' | 'missing'
-export type FilmographySort = 'year' | 'rating' | 'user_rating'
-export interface FilmographyPreferences {
-  filter: FilmographyFilter
-  sort: FilmographySort
-  descending: boolean
-}
-export const defaultFilmography: FilmographyPreferences = {
-  filter: 'all',
-  sort: 'year',
-  descending: true,
-}
+} from '../../entities/person/metadata'
 
 const sortLabels: Record<FilmographySort, string> = {
   year: 'По году',
@@ -46,30 +42,9 @@ const sortLabels: Record<FilmographySort, string> = {
   user_rating: 'По моей оценке',
 }
 
-// Работы без значения уходят в конец при любом направлении сортировки.
-function sortWorks(items: FilmographyItem[], prefs: FilmographyPreferences) {
-  const value = (item: FilmographyItem) =>
-    prefs.sort === 'year'
-      ? item.year
-      : prefs.sort === 'rating'
-        ? item.rating
-        : item.user_rating
-  const sign = prefs.descending ? -1 : 1
-  return [...items].sort((a, b) => {
-    const left = value(a)
-    const right = value(b)
-    if (left == null && right == null) return (b.year ?? 0) - (a.year ?? 0)
-    if (left == null) return 1
-    if (right == null) return -1
-    return sign * (left - right) || (b.year ?? 0) - (a.year ?? 0)
-  })
-}
-
-function decade(year?: number) {
-  return year ? `${Math.floor(year / 10) * 10}-е` : 'Без года'
-}
-
-export function DirectorProfilePage({
+// Экраны «23 · Профиль режиссёра» и «31 · Профиль актёра».
+export function PersonProfilePage({
+  section,
   id,
   preferences,
   onPreferences,
@@ -77,6 +52,7 @@ export function DirectorProfilePage({
   back,
   changed,
 }: {
+  section: PeopleSection
   id: number
   preferences: FilmographyPreferences
   onPreferences: (value: FilmographyPreferences) => void
@@ -84,7 +60,10 @@ export function DirectorProfilePage({
   back: () => void
   changed: (message: string) => void
 }) {
-  const resource = useResource((signal) => directorsApi.profile(id, signal), id)
+  const resource = useResource(
+    (signal) => section.api.profile(id, signal),
+    `${section.kind}:${id}`,
+  )
   // Локальные правки поверх загруженного профиля: подписка и добавленные работы.
   const [followed, setFollowed] = useState<boolean | null>(null)
   const [added, setAdded] = useState<
@@ -97,21 +76,25 @@ export function DirectorProfilePage({
 
   if (resource.loading || resource.error || !resource.data)
     return (
-      <Shell title="Режиссёр" navigate={navigate} onBack={back}>
+      <Shell
+        title={section.profile.fallbackTitle}
+        navigate={navigate}
+        onBack={back}
+      >
         {resource.loading ? (
           <SkeletonList />
         ) : (
           <ErrorState
-            message={resource.error || 'Режиссёр не найден'}
+            message={resource.error || section.profile.notFound}
             onRetry={resource.retry}
           />
         )}
       </Shell>
     )
 
-  const director = resource.data
-  const isFollowed = followed ?? director.followed
-  const works = director.filmography.map((w) => ({
+  const person = resource.data
+  const isFollowed = followed ?? person.followed
+  const works = person.filmography.map((w) => ({
     ...w,
     ...added[filmographyKey(w)],
   }))
@@ -119,28 +102,18 @@ export function DirectorProfilePage({
   const want = works.filter((w) => w.status === 'want_to_watch').length
   const missing = works.filter((w) => !w.status).length
   const percent = progress(watched, works.length)
-  const visible = sortWorks(
-    works.filter((w) =>
-      preferences.filter === 'all'
-        ? true
-        : preferences.filter === 'missing'
-          ? !w.status
-          : w.status === preferences.filter,
-    ),
-    preferences,
-  )
+  const visible = sortWorks(filterWorks(works, preferences.filter), preferences)
   const groupByDecade = preferences.sort === 'year'
 
   const toggleFollow = () =>
     follow.execute(
-      () =>
-        directorsApi.follow(director.id, !isFollowed).then(() => !isFollowed),
+      () => section.api.follow(person.id, !isFollowed).then(() => !isFollowed),
       (value) => {
         setFollowed(value)
         changed(
           value
-            ? `${director.name} — в отслеживаемых`
-            : `Больше не отслеживаешь: ${director.name}`,
+            ? `${person.name} — в отслеживаемых`
+            : `Больше не отслеживаешь: ${person.name}`,
         )
       },
     )
@@ -151,7 +124,7 @@ export function DirectorProfilePage({
       .execute(
         async () => {
           try {
-            return await directorsApi.addToWatchlist(item)
+            return await section.api.addToWatchlist(item)
           } catch (error) {
             // Работа уже в коллекции (добавлена в другом месте) — просто
             // перечитываем профиль, чтобы показать её настоящий статус.
@@ -185,35 +158,31 @@ export function DirectorProfilePage({
   let lastDecade = ''
   return (
     <Shell
-      title={director.name}
-      subtitle={personLine(director)}
+      title={person.name}
+      subtitle={personLine(person)}
       navigate={navigate}
       onBack={back}
     >
-      <section className="director-hero" aria-label="О режиссёре">
-        <DirectorAvatar
-          name={director.name}
-          url={director.photo_url}
-          size="lg"
-        />
-        <div className="director-hero__body">
-          {director.place_of_birth && (
+      <section className="person-hero" aria-label={section.profile.heroLabel}>
+        <PersonAvatar name={person.name} url={person.photo_url} size="lg" />
+        <div className="person-hero__body">
+          {person.place_of_birth && (
             <p className="small">
               <span className="muted">
-                {director.death_date ? 'Родился' : 'Место рождения'}:{' '}
+                {person.death_date ? 'Родился' : 'Место рождения'}:{' '}
               </span>
-              {director.place_of_birth}
+              {person.place_of_birth}
             </p>
           )}
-          {director.known_for.length > 0 && (
+          {person.known_for.length > 0 && (
             <p className="small">
               <span className="muted">Известен по: </span>
-              {director.known_for.join(', ')}
+              {person.known_for.join(', ')}
             </p>
           )}
           <Button
             variant={isFollowed ? 'secondary' : 'primary'}
-            className="director-hero__follow"
+            className="person-hero__follow"
             busy={follow.busy}
             aria-pressed={isFollowed}
             onClick={toggleFollow}
@@ -223,20 +192,19 @@ export function DirectorProfilePage({
         </div>
       </section>
       <InlineError message={follow.error} />
-      {director.stale && (
+      {person.stale && (
         <p className="muted small" role="status">
-          Каталог сейчас не отвечает — показываем сохранённую фильмографию.
+          {section.profile.stale}
         </p>
       )}
-      {!director.filmography_complete && (
+      {!person.filmography_complete && (
         <p className="muted small" role="status">
-          Полная фильмография ещё загружается — пока видны только работы из
-          коллекции.
+          {section.profile.loading}
         </p>
       )}
 
-      <section className="director-summary" aria-label="Мой прогресс">
-        <div className="director-summary__line">
+      <section className="person-summary" aria-label="Мой прогресс">
+        <div className="person-summary__line">
           <strong>{worksWatched(watched, works.length)}</strong>
           <span className="muted">{percent}%</span>
         </div>
@@ -244,10 +212,10 @@ export function DirectorProfilePage({
           value={percent}
           label={worksWatched(watched, works.length)}
         />
-        <dl className="director-summary__stats">
+        <dl className="person-summary__stats">
           <div>
             <dt>Моя средняя</dt>
-            <dd>{personalAverage(director.average_user_rating)}</dd>
+            <dd>{personalAverage(person.average_user_rating)}</dd>
           </div>
           <div>
             <dt>На потом</dt>
@@ -260,13 +228,11 @@ export function DirectorProfilePage({
         </dl>
       </section>
 
-      {director.biography && (
+      {person.biography && (
         <section className="stack stack--tight" aria-label="Биография">
           <h2>Биография</h2>
-          <p
-            className={`director-bio ${bioOpen ? '' : 'director-bio--clamped'}`}
-          >
-            {director.biography}
+          <p className={`person-bio ${bioOpen ? '' : 'person-bio--clamped'}`}>
+            {person.biography}
           </p>
           <button
             type="button"
@@ -281,8 +247,10 @@ export function DirectorProfilePage({
 
       <section className="stack" aria-labelledby="filmography-title">
         <div className="filmography-heading">
-          <h2 id="filmography-title">Фильмография</h2>
-          <span className="muted small">{filmCount(works.length)}</span>
+          <h2 id="filmography-title">{section.profile.worksTitle}</h2>
+          <span className="muted small">
+            {section.profile.worksCount(works.length)}
+          </span>
         </div>
         <div className="chips" role="group" aria-label="Какие работы показать">
           {(
@@ -335,7 +303,7 @@ export function DirectorProfilePage({
             title="Ничего не нашлось"
             description={
               preferences.filter === 'missing'
-                ? 'Все работы режиссёра уже в твоей коллекции.'
+                ? section.profile.allInCollection
                 : 'В этой подборке пока нет работ.'
             }
             action="Показать все"
@@ -356,6 +324,7 @@ export function DirectorProfilePage({
                 <FilmographyRow
                   key={filmographyKey(item)}
                   item={item}
+                  meta={section.workMeta(item)}
                   adding={adding === filmographyKey(item)}
                   onOpen={(work) =>
                     navigate(
@@ -365,7 +334,7 @@ export function DirectorProfilePage({
                             provider: 'tmdb',
                             mediaType: work.media_type,
                             externalId: work.tmdb_id!,
-                            directorId: director.id,
+                            ...section.catalogSource(person.id),
                           }),
                     )
                   }

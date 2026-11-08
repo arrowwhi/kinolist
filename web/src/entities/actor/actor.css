@@ -1,0 +1,70 @@
+/* Блок «В ролях» в карточке тайтла. */
+.cast-credits {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cast-credits__grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px 12px;
+}
+.cast-member {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  text-align: center;
+}
+.cast-member:disabled {
+  cursor: default;
+}
+button.cast-member:active .person-avatar {
+  opacity: 0.8;
+}
+.cast-member .person-avatar {
+  margin-bottom: 8px;
+}
+.cast-member__name {
+  max-width: 100%;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.cast-member__role {
+  max-width: 100%;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--color-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cast-member > .spinner {
+  position: absolute;
+  top: 20px;
+  left: calc(50% - 8px);
+  color: var(--color-poster-text);
+}
+.cast-member[aria-busy='true'] .person-avatar {
+  opacity: 0.5;
+}
+.cast-credits__toggle {
+  align-self: flex-start;
+  min-height: 36px;
+  padding: 4px 0;
+  color: var(--color-accent-text);
+  font-size: 13px;
+  text-align: left;
+}

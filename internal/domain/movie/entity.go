@@ -68,6 +68,10 @@ type Genre struct {
 type Movie struct {
 	Directors       []Director
 	DirectorsLoaded bool
+	// Cast — первые MaxCast актёров в порядке титров. CastLoaded: титры
+	// получены (пустой состав — тоже ответ), иначе связи не трогаются.
+	Cast            []CastMember
+	CastLoaded      bool
 	MediaType       MediaType
 	SeasonCount     *int16
 	ID              int64
@@ -106,17 +110,21 @@ type UserMovie struct {
 type Candidate struct {
 	Directors       []Director
 	DirectorsLoaded bool
-	MediaType       MediaType
-	SeasonCount     *int16
-	Provider        Provider
-	ExternalID      int32
-	Title           string
-	OriginalTitle   string
-	Year            int16
-	Overview        string
-	PosterPath      string
-	RuntimeMin      int16
-	Popularity      float32
+	// Cast — первые MaxCast актёров в порядке титров. CastLoaded: титры
+	// получены (пустой состав — тоже ответ), иначе связи не трогаются.
+	Cast          []CastMember
+	CastLoaded    bool
+	MediaType     MediaType
+	SeasonCount   *int16
+	Provider      Provider
+	ExternalID    int32
+	Title         string
+	OriginalTitle string
+	Year          int16
+	Overview      string
+	PosterPath    string
+	RuntimeMin    int16
+	Popularity    float32
 	// ReleaseDate — дата премьеры (у сериала — первого эпизода); nil, если
 	// каталог её не знает: Кинопоиск отдаёт только год.
 	ReleaseDate     *time.Time

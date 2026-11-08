@@ -60,6 +60,13 @@ export function HomePage({
           to="/v2/directors"
           navigate={navigate}
         />
+        <SectionLink
+          title="Актёры"
+          description="Следи за ролями любимых актёров."
+          action="Открыть актёров"
+          to="/actors"
+          navigate={navigate}
+        />
       </section>
       <GlobalStatistics revision={revision} />
     </Shell>

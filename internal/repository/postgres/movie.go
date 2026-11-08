@@ -82,7 +82,7 @@ func (r *MovieRepository) upsert(ctx context.Context, m movie.Movie) (movie.Movi
 		    kinopoisk_id   = coalesce(EXCLUDED.kinopoisk_id, movies.kinopoisk_id),
 		    updated_at     = now()
  WHERE movies.media_type=EXCLUDED.media_type
-		RETURNING id, coalesce(runtime_min, 0), coalesce(rating, 0), coalesce(rating_provider, ''), rating_vote_count, season_count, directors_fetched_at IS NOT NULL`
+		RETURNING id, coalesce(runtime_min, 0), coalesce(rating, 0), coalesce(rating_provider, ''), rating_vote_count, season_count, directors_fetched_at IS NOT NULL, cast_fetched_at IS NOT NULL`
 
 	const upsertKinopoisk = `
 		INSERT INTO movies (tmdb_id, kinopoisk_id, title, original_title, release_year,
@@ -104,7 +104,7 @@ func (r *MovieRepository) upsert(ctx context.Context, m movie.Movie) (movie.Movi
 		    tmdb_id        = coalesce(EXCLUDED.tmdb_id, movies.tmdb_id),
 		    updated_at     = now()
  WHERE movies.media_type=EXCLUDED.media_type
-		RETURNING id, coalesce(runtime_min, 0), coalesce(rating, 0), coalesce(rating_provider, ''), rating_vote_count, season_count, directors_fetched_at IS NOT NULL`
+		RETURNING id, coalesce(runtime_min, 0), coalesce(rating, 0), coalesce(rating_provider, ''), rating_vote_count, season_count, directors_fetched_at IS NOT NULL, cast_fetched_at IS NOT NULL`
 
 	stmt := upsertTMDB
 	if m.TMDBID == 0 {
@@ -115,11 +115,11 @@ func (r *MovieRepository) upsert(ctx context.Context, m movie.Movie) (movie.Movi
 	}
 
 	var id int64
-	var previouslyLoaded bool
+	var previouslyLoaded, castPreviouslyLoaded bool
 	err := q.QueryRow(ctx, stmt,
 		m.TMDBID, m.KinopoiskID, m.Title, m.OriginalTitle, m.Year,
 		m.Overview, m.PosterPath, m.RuntimeMin, m.Rating, m.RatingProvider, m.RatingVoteCount, m.MediaType, m.SeasonCount,
-	).Scan(&id, &m.RuntimeMin, &m.Rating, &m.RatingProvider, &m.RatingVoteCount, &m.SeasonCount, &previouslyLoaded)
+	).Scan(&id, &m.RuntimeMin, &m.Rating, &m.RatingProvider, &m.RatingVoteCount, &m.SeasonCount, &previouslyLoaded, &castPreviouslyLoaded)
 	if err != nil {
 		return movie.Movie{}, fmt.Errorf("upsert movie: %w", err)
 	}
@@ -141,6 +141,19 @@ func (r *MovieRepository) upsert(ctx context.Context, m movie.Movie) (movie.Movi
 	}
 	m.Directors = directors[m.ID]
 	m.DirectorsLoaded = m.DirectorsLoaded || previouslyLoaded
+
+	// Ошибка получения титров (CastLoaded=false) не стирает известный состав.
+	if m.CastLoaded {
+		if err := r.replaceCast(ctx, m.ID, m.Cast); err != nil {
+			return movie.Movie{}, err
+		}
+	}
+	cast, err := r.castForMovies(ctx, []int64{m.ID})
+	if err != nil {
+		return movie.Movie{}, err
+	}
+	m.Cast = cast[m.ID]
+	m.CastLoaded = m.CastLoaded || castPreviouslyLoaded
 	return m, nil
 }
 
@@ -205,6 +218,12 @@ func (r *MovieRepository) GetByTMDBID(ctx context.Context, tmdbID int32, mediaTy
 		return movie.Movie{}, err
 	}
 	m.Directors = directors[m.ID]
+
+	cast, err := r.castForMovies(ctx, []int64{m.ID})
+	if err != nil {
+		return movie.Movie{}, err
+	}
+	m.Cast = cast[m.ID]
 	return m, nil
 }
 
@@ -318,6 +337,11 @@ func (r *MovieRepository) Get(ctx context.Context, userID, userMovieID int64) (m
 		return movie.UserMovie{}, err
 	}
 	um.Movie.Directors = directors[um.Movie.ID]
+	cast, err := r.castForMovies(ctx, []int64{um.Movie.ID})
+	if err != nil {
+		return movie.UserMovie{}, err
+	}
+	um.Movie.Cast = cast[um.Movie.ID]
 
 	return um, nil
 }
@@ -367,8 +391,13 @@ func (r *MovieRepository) List(ctx context.Context, f movie.Filter) ([]movie.Use
 	if err != nil {
 		return nil, err
 	}
+	cast, err := r.castForMovies(ctx, movieIDs)
+	if err != nil {
+		return nil, err
+	}
 	for i := range items {
 		items[i].Movie.Directors = directors[items[i].Movie.ID]
+		items[i].Movie.Cast = cast[items[i].Movie.ID]
 		items[i].Movie.Genres = genres[items[i].Movie.ID]
 	}
 
@@ -573,7 +602,7 @@ func (r *MovieRepository) selectUserMovies() squirrel.SelectBuilder {
 		"m.id", "coalesce(m.tmdb_id, 0)", "coalesce(m.kinopoisk_id, 0)",
 		"m.title", "m.original_title", "coalesce(m.release_year, 0)",
 		"m.overview", "m.poster_path", "coalesce(m.runtime_min, 0)", "coalesce(m.rating, 0)", "coalesce(m.rating_provider, '')", "m.rating_vote_count",
-		"m.media_type", "m.season_count", "m.created_at", "m.updated_at", "m.directors_fetched_at IS NOT NULL",
+		"m.media_type", "m.season_count", "m.created_at", "m.updated_at", "m.directors_fetched_at IS NOT NULL", "m.cast_fetched_at IS NOT NULL",
 	).
 		From("user_movies um").
 		Join("movies m ON m.id = um.movie_id")
@@ -651,13 +680,13 @@ const movieColumns = `
 	m.id, coalesce(m.tmdb_id, 0), coalesce(m.kinopoisk_id, 0),
 	m.title, m.original_title, coalesce(m.release_year, 0),
 	m.overview, m.poster_path, coalesce(m.runtime_min, 0), coalesce(m.rating, 0), coalesce(m.rating_provider, ''), m.rating_vote_count,
-	m.media_type, m.season_count, m.created_at, m.updated_at, m.directors_fetched_at IS NOT NULL`
+	m.media_type, m.season_count, m.created_at, m.updated_at, m.directors_fetched_at IS NOT NULL, m.cast_fetched_at IS NOT NULL`
 
 func scanMovie(row scanner) (movie.Movie, error) {
 	var m movie.Movie
 	err := row.Scan(
 		&m.ID, &m.TMDBID, &m.KinopoiskID, &m.Title, &m.OriginalTitle, &m.Year,
-		&m.Overview, &m.PosterPath, &m.RuntimeMin, &m.Rating, &m.RatingProvider, &m.RatingVoteCount, &m.MediaType, &m.SeasonCount, &m.CreatedAt, &m.UpdatedAt, &m.DirectorsLoaded,
+		&m.Overview, &m.PosterPath, &m.RuntimeMin, &m.Rating, &m.RatingProvider, &m.RatingVoteCount, &m.MediaType, &m.SeasonCount, &m.CreatedAt, &m.UpdatedAt, &m.DirectorsLoaded, &m.CastLoaded,
 	)
 	return m, err
 }
@@ -670,7 +699,7 @@ func scanUserMovie(row scanner) (movie.UserMovie, error) {
 		&um.Movie.ID, &um.Movie.TMDBID, &um.Movie.KinopoiskID,
 		&um.Movie.Title, &um.Movie.OriginalTitle, &um.Movie.Year,
 		&um.Movie.Overview, &um.Movie.PosterPath, &um.Movie.RuntimeMin, &um.Movie.Rating, &um.Movie.RatingProvider, &um.Movie.RatingVoteCount, &um.Movie.MediaType, &um.Movie.SeasonCount,
-		&um.Movie.CreatedAt, &um.Movie.UpdatedAt, &um.Movie.DirectorsLoaded,
+		&um.Movie.CreatedAt, &um.Movie.UpdatedAt, &um.Movie.DirectorsLoaded, &um.Movie.CastLoaded,
 	)
 	return um, err
 }

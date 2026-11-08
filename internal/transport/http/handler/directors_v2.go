@@ -62,11 +62,11 @@ func defaultDesc(sort string) bool {
 	return sort == movie.MyDirectorsSortProgress || sort == movie.MyDirectorsSortUserRating
 }
 
-func (h *Directors) Mine(w http.ResponseWriter, r *http.Request) {
+// parseMyPeople читает параметры списков «Мои режиссёры» и «Мои актёры».
+func parseMyPeople(r *http.Request) (movie.MyDirectorsFilter, error) {
 	userID, ok := middleware.UserID(r.Context())
 	if !ok {
-		writeError(w, r, user.ErrInvalidTelegram)
-		return
+		return movie.MyDirectorsFilter{}, user.ErrInvalidTelegram
 	}
 	q := r.URL.Query()
 	f := movie.MyDirectorsFilter{
@@ -78,10 +78,17 @@ func (h *Directors) Mine(w http.ResponseWriter, r *http.Request) {
 	case orderAsc, orderDesc:
 		f.Desc = order == orderDesc
 	default:
-		writeError(w, r, errmap.ErrBadRequest)
-		return
+		return f, errmap.ErrBadRequest
 	}
 	if err := parsePaging(q, &f.Limit, &f.Offset); err != nil {
+		return f, err
+	}
+	return f, nil
+}
+
+func (h *Directors) Mine(w http.ResponseWriter, r *http.Request) {
+	f, err := parseMyPeople(r)
+	if err != nil {
 		writeError(w, r, err)
 		return
 	}

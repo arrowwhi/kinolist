@@ -1,19 +1,20 @@
 import { useState } from 'react'
 const colors = ['#38534a', '#5a4932', '#384f63', '#4b3a52', '#493c36']
-export function DirectorAvatar({
+// Аватар человека: фото из каталога или инициалы на цветной подложке.
+export function PersonAvatar({
   name,
   url,
   size = 'md',
 }: {
   name: string
   url?: string
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'sm' | 'md' | 'cast' | 'lg'
 }) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null)
   if (url && failedUrl !== url)
     return (
       <img
-        className={`director-avatar director-avatar--${size}`}
+        className={`person-avatar person-avatar--${size}`}
         src={url}
         alt=""
         loading="lazy"
@@ -33,7 +34,7 @@ export function DirectorAvatar({
     ]
   return (
     <span
-      className={`director-avatar director-avatar--${size} director-avatar--initials`}
+      className={`person-avatar person-avatar--${size} person-avatar--initials`}
       style={{ backgroundColor: color }}
       aria-hidden="true"
     >
