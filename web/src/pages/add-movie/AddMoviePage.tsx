@@ -5,6 +5,9 @@ import type { RecentCandidate } from '../../features/add-movie/useRecentCandidat
 import { Shell } from '../../widgets/app-shell/Shell'
 import { readClipboard } from '../../shared/lib/telegram'
 import { useAddMovie } from '../../features/add-movie/useAddMovie'
+import type { SavedSelection } from '../../features/add-movie/useAddMovie'
+import { useOpenActor } from '../../features/actors/useOpenActor'
+import { useOpenDirector } from '../../features/directors/useOpenDirector'
 import { RatingForm } from '../../features/rating/RatingForm'
 import { Button } from '../../shared/ui/Button'
 import { Field } from '../../shared/ui/Field'
@@ -44,6 +47,37 @@ export function AddMoviePage({
     navigate(`/movie/${id}`, true)
   })
   const [rating, setRating] = useState(false)
+  // Перед уходом в профиль человека запоминаем выбор в записи истории этого
+  // экрана: «назад» вернёт на ту же карточку, а не на пустую форму.
+  const keepSelection = () => {
+    if (!flow.job || !flow.candidate) return
+    const saved: SavedSelection = {
+      jobId: flow.job.id,
+      input: flow.input,
+      candidate: flow.candidate,
+    }
+    window.history.replaceState(
+      { ...window.history.state, addMovieSelection: saved },
+      '',
+    )
+  }
+  const openPerson = (path: string) => {
+    keepSelection()
+    navigate(path)
+  }
+  const actor = useOpenActor(openPerson)
+  const director = useOpenDirector(openPerson)
+  useEffect(() => {
+    const saved = window.history.state?.addMovieSelection as
+      SavedSelection | undefined
+    if (!saved) return
+    void flow.restore(saved).then((done) => {
+      if (!done) return
+      const state = { ...window.history.state }
+      delete state.addMovieSelection
+      window.history.replaceState(state, '')
+    })
+  }, [])
   // Дубль обнаружился уже на форме оценки — возвращаемся к карточке,
   // где есть кнопка «Открыть в коллекции».
   useEffect(() => {
@@ -257,9 +291,15 @@ export function AddMoviePage({
           {flow.busy && !flow.movie ? (
             <SkeletonList />
           ) : flow.movie ? (
-            <MoviePreview movie={flow.movie} />
+            <MoviePreview
+              movie={flow.movie}
+              onDirector={director.open}
+              directorPending={director.pending}
+              onActor={actor.open}
+              actorPending={actor.pending}
+            />
           ) : null}
-          <InlineError message={flow.error} />
+          <InlineError message={flow.error || actor.error || director.error} />
           {flow.existingId ? (
             <Button onClick={flow.openExisting}>Открыть в коллекции</Button>
           ) : flow.movie ? (

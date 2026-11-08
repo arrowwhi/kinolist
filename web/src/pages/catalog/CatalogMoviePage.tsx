@@ -13,7 +13,7 @@ import { useMutation } from '../../shared/hooks/useMutation'
 import { Button } from '../../shared/ui/Button'
 import { ErrorState, InlineError, SkeletonList } from '../../shared/ui/Feedback'
 import { useOpenActor } from '../../features/actors/useOpenActor'
-import { personPath } from '../../shared/lib/navigation'
+import { useOpenDirector } from '../../features/directors/useOpenDirector'
 
 // Карточка тайтла из каталога, которого ещё нет в коллекции (экраны
 // «Каталог / не в коллекции» и «Каталог / скоро»): выглядит как экран
@@ -44,6 +44,7 @@ export function CatalogMoviePage({
   const movie = resource.data
   const mutation = useMutation()
   const actor = useOpenActor(navigate)
+  const openDirector = useOpenDirector(navigate)
   const [rating, setRating] = useState(false)
   const ownedId = movie?.user_movie_id
   // Тайтл уже в коллекции — показываем его настоящую карточку.
@@ -140,11 +141,12 @@ export function CatalogMoviePage({
                 ? upcomingLabel(movie.release_date, movie.year)
                 : undefined
             }
-            onDirector={(id) => navigate(personPath('director', id))}
+            onDirector={openDirector.open}
+            directorPending={openDirector.pending}
             onActor={actor.open}
             actorPending={actor.pending}
           />
-          <InlineError message={actor.error} />
+          <InlineError message={actor.error || openDirector.error} />
           <p className="muted small">
             {[
               'Нет в коллекции',

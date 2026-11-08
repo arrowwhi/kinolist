@@ -9,6 +9,14 @@ import type {
 } from '../../api/types'
 import { errorMessage } from '../../shared/lib/errors'
 import { haptic } from '../../shared/lib/telegram'
+// Что нужно, чтобы вернуться к карточке «Это тот фильм?» после перехода
+// на профиль человека из её состава.
+export interface SavedSelection {
+  jobId: number
+  input: string
+  candidate: Candidate
+}
+
 export function useAddMovie(
   onAdded: (item: UserMovie) => void,
   onExisting: (id: number) => void,
@@ -182,6 +190,40 @@ export function useAddMovie(
       if (alive.current) setBusy(false)
     }
   }
+  // Возврат на экран подтверждения из профиля актёра или режиссёра:
+  // задача на сервере всё ещё ждёт выбора, поднимаем её и карточку заново.
+  // Возвращает false, если восстановление прервали (размонтирование или
+  // новый выбор) — тогда сохранённый выбор ещё пригодится.
+  async function restore(saved: SavedSelection): Promise<boolean> {
+    // Без lock: вызывается при монтировании, а в StrictMode первый запуск
+    // отменяется размонтированием и не должен заблокировать второй.
+    const version = ++selection.current
+    const current = () => alive.current && version === selection.current
+    setInput(saved.input)
+    setCandidate(saved.candidate)
+    setBusy(true)
+    setError(null)
+    try {
+      const restored = await api.getJob(saved.jobId)
+      if (!current()) return false
+      setJob(restored)
+      if (restored.status !== 'confirming') {
+        setCandidate(null)
+        return true
+      }
+      const details = await api.candidateDetails(restored.id, saved.candidate)
+      if (!current()) return false
+      setMovie(details)
+      return true
+    } catch (err) {
+      if (!current()) return false
+      setCandidate(null)
+      setError(errorMessage(err, 'Не удалось вернуться к карточке'))
+      return true
+    } finally {
+      if (current()) setBusy(false)
+    }
+  }
   function clearSelection() {
     setExistingId(null)
     selection.current++
@@ -206,6 +248,7 @@ export function useAddMovie(
     confirm,
     reset,
     clearSelection,
+    restore,
     pollStopped,
     resume: () => {
       setError(null)

@@ -1,7 +1,6 @@
 import { DirectorCredits } from '../../entities/director/DirectorCredits'
 import { useState } from 'react'
 import { api } from '../../api/client'
-import { personPath } from '../../shared/lib/navigation'
 import type { Navigate } from '../../shared/lib/navigation'
 import { Shell } from '../../widgets/app-shell/Shell'
 import { MovieHero } from '../../entities/movie/MovieHero'
@@ -19,6 +18,7 @@ import { formatDate } from '../../shared/lib/format'
 import { MovieSource } from '../../entities/movie/MovieSource'
 import { CastCredits } from '../../entities/actor/CastCredits'
 import { useOpenActor } from '../../features/actors/useOpenActor'
+import { useOpenDirector } from '../../features/directors/useOpenDirector'
 export function MoviePage({
   id,
   revision,
@@ -40,6 +40,7 @@ export function MoviePage({
   } = useResource((signal) => api.getMovie(id, signal), `${id}:${revision}`)
   const mutation = useMutation()
   const actor = useOpenActor(navigate)
+  const director = useOpenDirector(navigate)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const watched = item?.status === 'watched'
   return (
@@ -71,9 +72,8 @@ export function MoviePage({
           <DirectorCredits
             key={id}
             directors={item.movie.directors}
-            onOpen={(directorId) =>
-              navigate(personPath('director', directorId))
-            }
+            pending={director.pending}
+            onOpen={director.open}
           />
           <CastCredits
             key={`cast:${id}`}
@@ -81,7 +81,7 @@ export function MoviePage({
             pending={actor.pending}
             onOpen={actor.open}
           />
-          <InlineError message={actor.error} />
+          <InlineError message={actor.error || director.error} />
           <section className="stack stack--tight">
             <h2>{item.movie.media_type === 'tv' ? 'О сериале' : 'О фильме'}</h2>
             <p className="muted overview">

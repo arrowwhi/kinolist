@@ -61,3 +61,30 @@ export function mediaLabel(
   if (item.media_type !== 'tv') return 'Фильм'
   return item.episode_count ? `Сериал · ${item.episode_count} эп.` : 'Сериал'
 }
+
+// Человек из состава или режиссёров карточки: у заведённого есть наш id,
+// у остальных — только tmdb_id из каталога.
+export interface PersonRef {
+  id?: number
+  tmdb_id?: number
+  kinopoisk_id?: number
+  name: string
+}
+
+// Как открыть профиль: по нашему id сразу, по tmdb_id — после import,
+// без обоих — никак (только Кинопоиск).
+export function personTarget(
+  person: PersonRef,
+): { id: number } | { tmdbId: number } | null {
+  if (person.id) return { id: person.id }
+  if (person.tmdb_id) return { tmdbId: person.tmdb_id }
+  return null
+}
+
+export function personKey(person: PersonRef, index: number) {
+  return person.id
+    ? `id:${person.id}`
+    : person.tmdb_id
+      ? `tmdb:${person.tmdb_id}`
+      : `i:${index}`
+}

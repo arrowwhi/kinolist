@@ -1,8 +1,7 @@
 import type { ActorFilmographyItem } from '../../api/actors'
 import type { FilmographyItem } from '../../api/people'
-import type { CastMember } from '../../api/types'
 import { plural } from '../../shared/lib/format.ts'
-import { mediaLabel } from '../person/metadata.ts'
+import { mediaLabel, personKey, personTarget } from '../person/metadata.ts'
 
 export function actorCount(count: number) {
   return `${count} ${plural(count, ['актёр', 'актёра', 'актёров'])}`
@@ -31,20 +30,5 @@ export function roleMeta(
 // В карточке сначала видно четыре актёра, остальные — по ссылке.
 export const castPreviewSize = 4
 
-export function castKey(member: CastMember, index: number) {
-  return member.id
-    ? `id:${member.id}`
-    : member.tmdb_id
-      ? `tmdb:${member.tmdb_id}`
-      : `i:${index}`
-}
-
-// Как открыть профиль участника состава: по нашему id сразу, по tmdb_id —
-// после import, без обоих — никак (только Кинопоиск).
-export function castTarget(
-  member: CastMember,
-): { id: number } | { tmdbId: number } | null {
-  if (member.id) return { id: member.id }
-  if (member.tmdb_id) return { tmdbId: member.tmdb_id }
-  return null
-}
+// Участник «В ролях» открывается так же, как любой человек карточки.
+export { personKey as castKey, personTarget as castTarget }

@@ -1,11 +1,15 @@
 import { useState } from 'react'
 import type { Director } from '../../api/types'
+import { personKey, personTarget } from '../person/metadata'
 export function DirectorCredits({
   directors = [],
+  pending,
   onOpen,
 }: {
   directors?: Director[]
-  onOpen?: (id: number) => void
+  // Ключ режиссёра (personKey), чей профиль сейчас заводится.
+  pending?: string | null
+  onOpen?: (director: Director, key: string) => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const visible = expanded ? directors : directors.slice(0, 3)
@@ -20,10 +24,19 @@ export function DirectorCredits({
       ) : (
         <div className="director-credits__names">
           {visible.map((d, index) =>
-            onOpen && d.id ? (
-              <button type="button" key={d.id} onClick={() => onOpen(d.id!)}>
+            onOpen && personTarget(d) ? (
+              <button
+                type="button"
+                key={personKey(d, index)}
+                aria-busy={pending === personKey(d, index) || undefined}
+                disabled={pending != null}
+                onClick={() => onOpen(d, personKey(d, index))}
+              >
                 {d.name}
                 <span aria-hidden="true"> →</span>
+                {pending === personKey(d, index) && (
+                  <span className="spinner" aria-hidden="true" />
+                )}
               </button>
             ) : (
               <span key={`${d.tmdb_id ?? d.kinopoisk_id ?? index}:${index}`}>
