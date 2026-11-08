@@ -269,8 +269,9 @@ func botConfig(cfg *config.Config) tg.Config {
 	bc.Webhook.Path = cfg.Telegram.WebhookPath
 	// Встроенный webhook-сервер не нужен: обработчик смонтирован на публичный роутер.
 	bc.Webhook.Port = ""
-	// Апдейты, накопившиеся пока сервис лежал, чаще всего уже неактуальны.
-	bc.Webhook.DropPendingUpdates = true
+	// Накопившиеся апдейты не выбрасываем: setWebhook вызывается на каждом деплое,
+	// и сообщения, пришедшие в момент переключения контейнеров, иначе терялись бы.
+	bc.Webhook.DropPendingUpdates = false
 
 	return bc
 }
