@@ -137,7 +137,7 @@ export function AddMoviePage({
               <div className="add-form__row">
                 <Field
                   id={queryId}
-                  placeholder="Например, «Идеальные дни»"
+                  placeholder="«Идеальные дни»"
                   value={flow.input}
                   onChange={(e) => flow.setInput(e.target.value)}
                   disabled={flow.busy}
