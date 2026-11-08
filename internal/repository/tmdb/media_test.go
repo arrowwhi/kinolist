@@ -40,9 +40,16 @@ func TestMixedSearchAndTypedDetails(t *testing.T) {
 	if err != nil || series.SeasonCount == nil || *series.SeasonCount != 2 || series.RuntimeMin != 0 {
 		t.Fatalf("series: %+v %v", series, err)
 	}
+	// У сериала датой выхода считается первый эфир.
+	if series.ReleaseDate == nil || series.ReleaseDate.Format(time.DateOnly) != "2022-02-01" {
+		t.Fatalf("series release date: %v", series.ReleaseDate)
+	}
 	film, err := client.Details(ctx, 7, movie.MediaMovie)
 	if err != nil || film.RuntimeMin != 120 || film.SeasonCount != nil || film.MediaType != movie.MediaMovie {
 		t.Fatalf("film: %+v %v", film, err)
+	}
+	if film.ReleaseDate != nil {
+		t.Fatalf("film without release_date must stay nil: %v", film.ReleaseDate)
 	}
 }
 

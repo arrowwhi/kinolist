@@ -208,6 +208,45 @@ func (r *MovieRepository) GetByTMDBID(ctx context.Context, tmdbID int32, mediaTy
 	return m, nil
 }
 
+// CatalogMark находит работу каталога в общем справочнике и в коллекции
+// пользователя. Отсутствие — не ошибка: возвращаются нули.
+func (r *MovieRepository) CatalogMark(ctx context.Context, userID int64, provider movie.Provider, externalID int32, mt movie.MediaType) (movie.CatalogMark, error) {
+	ctx = queryName(ctx, "movie.catalog_mark")
+
+	// Имя колонки выбирается из проверенного провайдера, пользовательская
+	// строка в запрос не попадает.
+	var column string
+	switch provider {
+	case movie.ProviderTMDB:
+		column = "m.tmdb_id"
+	case movie.ProviderKinopoisk:
+		column = "m.kinopoisk_id"
+	default:
+		return movie.CatalogMark{}, movie.ErrProviderUnavailable
+	}
+	mt = mt.Normalize()
+	if !mt.Valid() {
+		return movie.CatalogMark{}, movie.ErrInvalidMediaType
+	}
+
+	q := `
+		SELECT m.id, coalesce(um.id, 0), coalesce(um.status, ''), coalesce(um.user_rating, 0)
+		FROM movies m
+		LEFT JOIN user_movies um ON um.movie_id = m.id AND um.user_id = $1
+		WHERE ` + column + ` = $2 AND m.media_type = $3`
+
+	var mark movie.CatalogMark
+	err := r.tx.Querier(ctx).QueryRow(ctx, q, userID, externalID, mt).
+		Scan(&mark.MovieID, &mark.UserMovieID, &mark.Status, &mark.UserRating)
+	if err != nil {
+		if isNoRows(err) {
+			return movie.CatalogMark{}, nil
+		}
+		return movie.CatalogMark{}, fmt.Errorf("get catalog mark: %w", err)
+	}
+	return mark, nil
+}
+
 // Add кладёт фильм в коллекцию пользователя. Повторное добавление —
 // не ошибка инфраструктуры, а доменное состояние ErrAlreadyInCollection.
 func (r *MovieRepository) Add(ctx context.Context, um movie.UserMovie) (movie.UserMovie, error) {

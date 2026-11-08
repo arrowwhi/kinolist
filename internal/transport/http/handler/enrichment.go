@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -23,14 +24,16 @@ type enrichmentUseCase interface {
 	ConfirmWithOptions(ctx context.Context, userID, jobID int64, provider movie.Provider, externalID int32, options movie.ConfirmOptions) (movie.UserMovie, error)
 	CandidateDetails(ctx context.Context, userID, jobID int64, provider movie.Provider, externalID int32, mediaTypes ...movie.MediaType) (movie.Movie, error)
 	AddFromCatalog(ctx context.Context, userID int64, provider movie.Provider, externalID int32, options movie.ConfirmOptions) (movie.UserMovie, error)
+	CatalogTitle(ctx context.Context, userID int64, provider movie.Provider, externalID int32, mediaType movie.MediaType) (movie.CatalogTitle, error)
 }
 
 type Enrichment struct {
-	uc enrichmentUseCase
+	uc  enrichmentUseCase
+	now func() time.Time
 }
 
 func NewEnrichment(uc enrichmentUseCase) *Enrichment {
-	return &Enrichment{uc: uc}
+	return &Enrichment{uc: uc, now: time.Now}
 }
 
 // Create принимает ссылку или название и отвечает 202: поиск идёт в фоне,
@@ -116,7 +119,7 @@ func (h *Enrichment) Confirm(w http.ResponseWriter, r *http.Request) {
 }
 
 // AddFromCatalog добавляет работу по внешнему id, без поиска и задачи:
-// так работает «＋» в фильмографии режиссёра.
+// так работают «＋» в фильмографии режиссёра и кнопки карточки каталога.
 func (h *Enrichment) AddFromCatalog(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserID(r.Context())
 	if !ok {
@@ -138,7 +141,9 @@ func (h *Enrichment) AddFromCatalog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, movie.ErrInvalidMediaType)
 		return
 	}
-	um, err := h.uc.AddFromCatalog(r.Context(), userID, provider, req.ExternalID, movie.ConfirmOptions{MediaType: mediaType, Status: movie.Status(req.Status)})
+	um, err := h.uc.AddFromCatalog(r.Context(), userID, provider, req.ExternalID, movie.ConfirmOptions{
+		MediaType: mediaType, Status: movie.Status(req.Status), UserRating: req.UserRating, Review: req.Review,
+	})
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -217,4 +222,35 @@ func (h *Enrichment) CandidateDetails(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, converter.Movie(m))
+}
+
+// CatalogTitle отдаёт карточку работы из каталога по внешнему id —
+// для работ фильмографии, которых ещё нет в коллекции.
+func (h *Enrichment) CatalogTitle(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserID(r.Context())
+	if !ok {
+		writeError(w, r, user.ErrInvalidTelegram)
+		return
+	}
+	provider := movie.Provider(chi.URLParam(r, "provider"))
+	if provider != movie.ProviderTMDB && provider != movie.ProviderKinopoisk {
+		writeError(w, r, errmap.ErrBadRequest)
+		return
+	}
+	mediaType := movie.MediaType(chi.URLParam(r, "media_type"))
+	if !mediaType.Valid() {
+		writeError(w, r, movie.ErrInvalidMediaType)
+		return
+	}
+	externalID, err := strconv.ParseInt(chi.URLParam(r, "external_id"), 10, 32)
+	if err != nil || externalID <= 0 {
+		writeError(w, r, errmap.ErrBadRequest)
+		return
+	}
+	t, err := h.uc.CatalogTitle(r.Context(), userID, provider, int32(externalID), mediaType)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, converter.CatalogMovie(t, h.now()))
 }

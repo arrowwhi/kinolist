@@ -15,6 +15,7 @@ import {
 import type { FilmographyPreferences } from '../pages/directors-v2/DirectorProfilePage'
 import { AddDirectorPage } from '../pages/directors-v2/AddDirectorPage'
 import { home } from './route'
+import { parseCatalogRoute } from '../shared/lib/navigation'
 import { useNavigation } from './navigation'
 import { Shell } from '../widgets/app-shell/Shell'
 import { useTelegramSetup } from '../shared/lib/telegram'
@@ -28,6 +29,7 @@ import { MoviePage } from '../pages/movie/MoviePage'
 import { NotePage } from '../pages/movie/NotePage'
 import { RatePage } from '../pages/movie/RatePage'
 import { AddMoviePage } from '../pages/add-movie/AddMoviePage'
+import { CatalogMoviePage } from '../pages/catalog/CatalogMoviePage'
 import { useRecentCandidates } from '../features/add-movie/useRecentCandidates'
 import { defaultFilters, directorFilters } from '../features/collection/model'
 export function App() {
@@ -65,6 +67,7 @@ export function App() {
   const directorMatch = path.match(/^\/directors\/(\d+)$/)
   const genreMatch = path.match(/^\/genres\/(\d+)$/)
   const directorV2Match = path.match(/^\/v2\/directors\/(\d+)$/)
+  const catalogRoute = parseCatalogRoute(location)
   let content
   if (path === home)
     content = <HomePage navigate={navigate} revision={revision} />
@@ -104,7 +107,17 @@ export function App() {
         changed={changed}
       />
     )
-  } else if (routeMatch && Number(routeMatch[1]) > 0) {
+  } else if (catalogRoute)
+    content = (
+      <CatalogMoviePage
+        key={location}
+        route={catalogRoute}
+        navigate={navigate}
+        back={back}
+        changed={changed}
+      />
+    )
+  else if (routeMatch && Number(routeMatch[1]) > 0) {
     const props = { id: Number(routeMatch[1]), navigate, back, changed }
     content =
       routeMatch[2] === 'note' ? (

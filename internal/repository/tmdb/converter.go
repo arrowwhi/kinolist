@@ -49,6 +49,7 @@ func (r result) toCandidate() movie.Candidate {
 		Title:          r.Title,
 		OriginalTitle:  r.OriginalTitle,
 		Year:           parseYear(r.ReleaseDate),
+		ReleaseDate:    parseDate(r.ReleaseDate),
 		Overview:       r.Overview,
 		PosterPath:     r.PosterPath,
 		Popularity:     r.Popularity,

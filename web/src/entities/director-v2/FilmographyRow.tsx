@@ -8,12 +8,15 @@ export function FilmographyRow({
 }: {
   item: FilmographyItem
   adding: boolean
-  onOpen: (userMovieId: number) => void
+  // Своя работа открывает карточку коллекции, чужая — карточку каталога.
+  onOpen: (item: FilmographyItem) => void
   onAdd: (item: FilmographyItem) => void
 }) {
   const owned = item.user_movie_id != null
   // Работу без TMDB id в коллекцию одной кнопкой не добавить.
   const addable = item.tmdb_id != null
+  // Работу только из Кинопоиска (без TMDB id) открыть пока негде.
+  const openable = owned || addable
   const body = (
     <>
       <Poster url={item.poster_url} title={item.title} />
@@ -49,11 +52,11 @@ export function FilmographyRow({
   )
   return (
     <li className={`film-row ${owned ? 'film-row--owned' : ''}`}>
-      {owned ? (
+      {openable ? (
         <button
           type="button"
           className="film-row__main"
-          onClick={() => onOpen(item.user_movie_id!)}
+          onClick={() => onOpen(item)}
         >
           {body}
         </button>

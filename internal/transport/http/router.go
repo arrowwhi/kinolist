@@ -72,6 +72,9 @@ func NewRouter(d RouterDeps) http.Handler {
 		api.Put("/directors/{id}/follow", d.Directors.Follow)
 		api.Delete("/directors/{id}/follow", d.Directors.Unfollow)
 
+		// Карточка работы прямо из каталога: фильмография режиссёра.
+		api.Get("/catalog/{provider}/{media_type}/{external_id}", d.Jobs.CatalogTitle)
+
 		api.Route("/movies", func(m chi.Router) {
 			m.Get("/", d.Movies.List)
 			m.Post("/", d.Jobs.AddFromCatalog)

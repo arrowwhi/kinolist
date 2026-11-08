@@ -3,6 +3,7 @@ package enrichment_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -817,5 +818,114 @@ func TestAddFromCatalogReportsDuplicate(t *testing.T) {
 	}
 	if _, err := u.AddFromCatalog(context.Background(), 7, movie.ProviderTMDB, 5, movie.ConfirmOptions{Status: "bad"}); !errors.Is(err, movie.ErrInvalidStatus) {
 		t.Fatalf("validation err = %v", err)
+	}
+}
+
+func TestAddFromCatalogSavesWatchedWithRatingAndReview(t *testing.T) {
+	t.Parallel()
+
+	u, d := newUseCase(t, false)
+	d.primary.EXPECT().Provider().Return(movie.ProviderTMDB).AnyTimes()
+	d.primary.EXPECT().Details(gomock.Any(), int32(5), movie.MediaMovie).
+		Return(movie.Candidate{Provider: movie.ProviderTMDB, ExternalID: 5, MediaType: movie.MediaMovie, Title: "Дюна"}, nil)
+	d.tx.EXPECT().BeginTransaction(gomock.Any()).DoAndReturn(
+		func(ctx context.Context) (context.Context, error) { return ctx, nil })
+	d.tx.EXPECT().FinishTransaction(gomock.Any(), gomock.Any())
+	d.movies.EXPECT().GenresByTMDBIDs(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	d.movies.EXPECT().Upsert(gomock.Any(), gomock.Any()).Return(movie.Movie{ID: 55, TMDBID: 5}, nil)
+	d.movies.EXPECT().Add(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, um movie.UserMovie) (movie.UserMovie, error) {
+			if um.Status != movie.StatusWatched || um.UserRating != 8 || um.Review != "Пески" {
+				t.Fatalf("user movie: %+v", um)
+			}
+			um.ID = 101
+			return um, nil
+		})
+
+	got, err := u.AddFromCatalog(context.Background(), 7, movie.ProviderTMDB, 5, movie.ConfirmOptions{
+		MediaType: movie.MediaMovie, Status: movie.StatusWatched, UserRating: 8, Review: "Пески",
+	})
+	if err != nil || got.ID != 101 {
+		t.Fatalf("got %+v %v", got, err)
+	}
+}
+
+func TestAddFromCatalogValidatesRatingAndReview(t *testing.T) {
+	t.Parallel()
+
+	u, _ := newUseCase(t, false)
+	if _, err := u.AddFromCatalog(context.Background(), 7, movie.ProviderTMDB, 5, movie.ConfirmOptions{UserRating: 11}); !errors.Is(err, movie.ErrInvalidRating) {
+		t.Fatalf("rating err = %v", err)
+	}
+	long := strings.Repeat("я", movie.MaxReviewLength+1)
+	if _, err := u.AddFromCatalog(context.Background(), 7, movie.ProviderTMDB, 5, movie.ConfirmOptions{Review: long}); !errors.Is(err, movie.ErrReviewTooLong) {
+		t.Fatalf("review err = %v", err)
+	}
+}
+
+func TestCatalogTitleMarksCollectionAndCarriesReleaseDate(t *testing.T) {
+	t.Parallel()
+
+	u, d := newUseCase(t, false)
+	release := time.Date(2024, 2, 28, 0, 0, 0, 0, time.UTC)
+	d.primary.EXPECT().Provider().Return(movie.ProviderTMDB).AnyTimes()
+	d.primary.EXPECT().Details(gomock.Any(), int32(693134), movie.MediaMovie).
+		Return(movie.Candidate{
+			Provider: movie.ProviderTMDB, ExternalID: 693134, MediaType: movie.MediaMovie,
+			Title: "Дюна: Часть вторая", Year: 2024, ReleaseDate: &release, RuntimeMin: 166,
+			GenreTMDBIDs: []int32{878}, DirectorsLoaded: true,
+		}, nil)
+	d.movies.EXPECT().GenresByTMDBIDs(gomock.Any(), []int32{878}).Return([]movie.Genre{{ID: 3, TMDBID: 878, NameRU: "фантастика"}}, nil)
+	d.movies.EXPECT().CatalogMark(gomock.Any(), int64(7), movie.ProviderTMDB, int32(693134), movie.MediaMovie).
+		Return(movie.CatalogMark{MovieID: 55, UserMovieID: 9, Status: movie.StatusWatched, UserRating: 9}, nil)
+
+	got, err := u.CatalogTitle(context.Background(), 7, movie.ProviderTMDB, 693134, movie.MediaMovie)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if got.ID != 55 || got.TMDBID != 693134 || got.UserMovieID != 9 || got.Status != movie.StatusWatched || got.UserRating != 9 {
+		t.Fatalf("marks: %+v", got)
+	}
+	if got.ReleaseDate == nil || !got.ReleaseDate.Equal(release) || got.RuntimeMin != 166 || len(got.Genres) != 1 {
+		t.Fatalf("details: %+v", got)
+	}
+}
+
+func TestCatalogTitleOutsideCollection(t *testing.T) {
+	t.Parallel()
+
+	u, d := newUseCase(t, false)
+	d.primary.EXPECT().Provider().Return(movie.ProviderTMDB).AnyTimes()
+	d.primary.EXPECT().Details(gomock.Any(), int32(77), movie.MediaTV).
+		Return(movie.Candidate{Provider: movie.ProviderTMDB, ExternalID: 77, MediaType: movie.MediaTV, Title: "Сериал"}, nil)
+	d.movies.EXPECT().CatalogMark(gomock.Any(), int64(7), movie.ProviderTMDB, int32(77), movie.MediaTV).Return(movie.CatalogMark{}, nil)
+
+	got, err := u.CatalogTitle(context.Background(), 7, movie.ProviderTMDB, 77, movie.MediaTV)
+	if err != nil || got.ID != 0 || got.UserMovieID != 0 || got.MediaType != movie.MediaTV || got.ReleaseDate != nil {
+		t.Fatalf("got %+v %v", got, err)
+	}
+}
+
+func TestCatalogTitleErrors(t *testing.T) {
+	t.Parallel()
+
+	u, d := newUseCase(t, false)
+	d.primary.EXPECT().Provider().Return(movie.ProviderTMDB).AnyTimes()
+	d.primary.EXPECT().Details(gomock.Any(), int32(404), movie.MediaMovie).Return(movie.Candidate{}, movie.ErrNotFound)
+	d.primary.EXPECT().Details(gomock.Any(), int32(502), movie.MediaMovie).Return(movie.Candidate{}, movie.ErrProviderUnavailable)
+
+	ctx := context.Background()
+	if _, err := u.CatalogTitle(ctx, 7, movie.ProviderTMDB, 404, movie.MediaMovie); !errors.Is(err, movie.ErrNotFound) {
+		t.Fatalf("not found err = %v", err)
+	}
+	if _, err := u.CatalogTitle(ctx, 7, movie.ProviderTMDB, 502, movie.MediaMovie); !errors.Is(err, movie.ErrProviderUnavailable) {
+		t.Fatalf("unavailable err = %v", err)
+	}
+	if _, err := u.CatalogTitle(ctx, 7, movie.ProviderTMDB, 1, "anime"); !errors.Is(err, movie.ErrInvalidMediaType) {
+		t.Fatalf("media type err = %v", err)
+	}
+	// Запасной каталог не настроен — Кинопоиск недоступен.
+	if _, err := u.CatalogTitle(ctx, 7, movie.ProviderKinopoisk, 1, movie.MediaMovie); !errors.Is(err, movie.ErrProviderUnavailable) {
+		t.Fatalf("kinopoisk err = %v", err)
 	}
 }

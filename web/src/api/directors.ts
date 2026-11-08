@@ -1,6 +1,7 @@
 // Раздел «Мои режиссёры»: подписки и полная фильмография из каталога.
 import { request } from './client'
-import type { MediaType, Status, UserMovie } from './types'
+import { catalogApi } from './catalog'
+import type { MediaType, Status } from './types'
 
 export interface DirectorOverview {
   id: number
@@ -134,14 +135,12 @@ export const directorsApi = {
     })
   },
   // Быстрое добавление работы из фильмографии в «На потом».
+  // Кнопка «+» есть только у работ с tmdb_id.
   addToWatchlist(item: FilmographyItem) {
-    return request<UserMovie>('/movies', {
-      method: 'POST',
-      body: JSON.stringify({
-        provider: 'tmdb',
-        external_id: item.tmdb_id,
-        media_type: item.media_type,
-      }),
+    return catalogApi.add({
+      provider: 'tmdb',
+      external_id: item.tmdb_id!,
+      media_type: item.media_type,
     })
   },
 }

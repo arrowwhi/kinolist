@@ -29,6 +29,7 @@ type (
 		Add(ctx context.Context, um movie.UserMovie) (movie.UserMovie, error)
 		GenresByTMDBIDs(ctx context.Context, tmdbIDs []int32) ([]movie.Genre, error)
 		GenresByExternalNames(ctx context.Context, p movie.Provider, names []string) ([]movie.Genre, error)
+		CatalogMark(ctx context.Context, userID int64, provider movie.Provider, externalID int32, mt movie.MediaType) (movie.CatalogMark, error)
 	}
 
 	reelFetcher interface {
@@ -451,6 +452,39 @@ func (uc *UseCase) AddFromCatalog(ctx context.Context, userID int64, provider mo
 	return added, nil
 }
 
+// CatalogTitle отдаёт карточку работы прямо из каталога — для фильмографии
+// режиссёра, где работа может быть ещё не в коллекции. Детали берутся тем же
+// путём, что и при добавлении (кэш каталога), а пометки коллекции — из базы.
+func (uc *UseCase) CatalogTitle(ctx context.Context, userID int64, provider movie.Provider, externalID int32, mediaType movie.MediaType) (movie.CatalogTitle, error) {
+	if !mediaType.Valid() {
+		return movie.CatalogTitle{}, movie.ErrInvalidMediaType
+	}
+	if externalID <= 0 {
+		return movie.CatalogTitle{}, movie.ErrNotFound
+	}
+	detailed, err := uc.details(ctx, movie.Candidate{Provider: provider, ExternalID: externalID, MediaType: mediaType})
+	if err != nil {
+		return movie.CatalogTitle{}, err
+	}
+	genres, err := uc.resolveGenres(ctx, detailed)
+	if err != nil {
+		return movie.CatalogTitle{}, err
+	}
+	mark, err := uc.movies.CatalogMark(ctx, userID, provider, externalID, mediaType)
+	if err != nil {
+		return movie.CatalogTitle{}, fmt.Errorf("catalog mark: %w", err)
+	}
+	m := toMovie(detailed, genres)
+	m.ID = mark.MovieID
+	return movie.CatalogTitle{
+		Movie:       m,
+		ReleaseDate: detailed.ReleaseDate,
+		UserMovieID: mark.UserMovieID,
+		Status:      mark.Status,
+		UserRating:  mark.UserRating,
+	}, nil
+}
+
 // Reject отменяет задачу: пользователь сказал, что это не тот фильм.
 func (uc *UseCase) Reject(ctx context.Context, userID, jobID int64) error {
 	job, err := uc.jobs.GetForUser(ctx, userID, jobID)
@@ -668,6 +702,9 @@ func (uc *UseCase) details(ctx context.Context, chosen movie.Candidate) (movie.C
 	}
 	if d.Year == 0 {
 		d.Year = chosen.Year
+	}
+	if d.ReleaseDate == nil {
+		d.ReleaseDate = chosen.ReleaseDate
 	}
 	if d.Rating == 0 {
 		d.Rating = chosen.Rating

@@ -70,6 +70,19 @@ func DirectorProfile(p movie.DirectorProfile, now time.Time) dto.DirectorProfile
 	}
 }
 
+// CatalogMovie считает upcoming по тому же правилу, что и фильмография
+// режиссёра: работа из коллекции «скоро» не помечается.
+func CatalogMovie(t movie.CatalogTitle, now time.Time) dto.CatalogMovie {
+	return dto.CatalogMovie{
+		Movie:       Movie(t.Movie),
+		ReleaseDate: date(t.ReleaseDate),
+		Upcoming:    t.UserMovieID == 0 && movie.IsUpcoming(t.ReleaseDate, t.Year, now),
+		UserMovieID: t.UserMovieID,
+		Status:      string(t.Status),
+		UserRating:  t.UserRating,
+	}
+}
+
 func PersonSearchList(items []movie.PersonSearchResult) dto.PersonSearchList {
 	out := make([]dto.PersonSearchResult, 0, len(items))
 	for _, p := range items {

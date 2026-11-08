@@ -4,7 +4,16 @@ import { formatRuntime } from '../../shared/lib/format'
 import { movieMetadata } from './metadata'
 import { Poster } from './Poster'
 import { Rating } from './Rating'
-export function MoviePreview({ movie }: { movie: Movie }) {
+export function MoviePreview({
+  movie,
+  upcoming,
+  onDirector,
+}: {
+  movie: Movie
+  // Тайтл ещё не вышел: вместо рейтинга — метка «Скоро · декабрь 2026».
+  upcoming?: string
+  onDirector?: (id: number) => void
+}) {
   return (
     <>
       <Poster
@@ -22,14 +31,18 @@ export function MoviePreview({ movie }: { movie: Movie }) {
           .join(' · ')}
       </p>
       <div className="preview-metadata">
-        <Rating movie={movie} />
+        {upcoming ? (
+          <span className="metadata-tag">{upcoming}</span>
+        ) : (
+          <Rating movie={movie} />
+        )}
         {movie.genres.map((g) => (
           <span className="metadata-tag" key={g.id}>
             {g.name_ru}
           </span>
         ))}
       </div>
-      <DirectorCredits directors={movie.directors} />
+      <DirectorCredits directors={movie.directors} onOpen={onDirector} />
       <p className="muted overview">
         {movie.overview || 'В каталоге пока нет описания.'}
       </p>

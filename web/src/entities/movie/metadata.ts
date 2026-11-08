@@ -35,3 +35,28 @@ export function candidateKey(
 ) {
   return `${candidate.provider}:${candidate.media_type ?? 'movie'}:${candidate.external_id}`
 }
+
+const releaseMonths = [
+  'январь',
+  'февраль',
+  'март',
+  'апрель',
+  'май',
+  'июнь',
+  'июль',
+  'август',
+  'сентябрь',
+  'октябрь',
+  'ноябрь',
+  'декабрь',
+] as const
+
+// Метка ещё не вышедшего тайтла: «Скоро · декабрь 2026». release_date
+// приходит как «2026-12-18», бывает и без дня или месяца; без даты — год.
+export function upcomingLabel(releaseDate?: string, year?: number) {
+  const match = releaseDate?.match(/^(\d{4})(?:-(\d{2}))?/)
+  const releaseYear = match ? Number(match[1]) : year
+  const month = match?.[2] ? releaseMonths[Number(match[2]) - 1] : undefined
+  if (!releaseYear) return 'Скоро'
+  return `Скоро · ${month ? `${month} ${releaseYear}` : releaseYear}`
+}

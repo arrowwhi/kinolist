@@ -117,6 +117,9 @@ type Candidate struct {
 	PosterPath      string
 	RuntimeMin      int16
 	Popularity      float32
+	// ReleaseDate — дата премьеры (у сериала — первого эпизода); nil, если
+	// каталог её не знает: Кинопоиск отдаёт только год.
+	ReleaseDate     *time.Time
 	RatingProvider  Provider
 	RatingVoteCount *int32
 	Rating          float32
@@ -234,6 +237,25 @@ func (o ConfirmOptions) Validate() error {
 		return ErrInvalidRating
 	}
 	return ValidateReview(o.Review)
+}
+
+// CatalogMark — что база знает о работе из каталога: id в общем справочнике
+// фильмов и запись в коллекции пользователя. Нули — работы там нет.
+type CatalogMark struct {
+	MovieID     int64
+	UserMovieID int64
+	Status      Status
+	UserRating  int16
+}
+
+// CatalogTitle — карточка работы прямо из каталога, с пометками коллекции
+// пользователя. Movie.ID равен 0, если работы нет в общем справочнике.
+type CatalogTitle struct {
+	Movie
+	ReleaseDate *time.Time
+	UserMovieID int64
+	Status      Status
+	UserRating  int16
 }
 
 // AlreadyInCollectionError preserves the domain sentinel and identifies the existing entry.

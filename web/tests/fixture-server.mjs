@@ -60,6 +60,7 @@ const movies = [
 movies[0].genres = [genres[1]]
 movies[0].year = 2024
 movies[3].directors = []
+movies[0].tmdb_id = 1
 const catalog = [
   { ...movies[0], external_id: 1 },
   { ...movies[1], external_id: 2 },
@@ -68,6 +69,37 @@ const catalog = [
   { ...movies[3], external_id: 4 },
   makeMovie(8, 'Тьма', 'tv', 3),
 ].map((m) => ({ ...m, external_id: m.external_id ?? m.id, provider: 'tmdb' }))
+// Каталог вне коллекции: фильмография режиссёра и карточки /catalog.
+const catalogTitles = [
+  {
+    ...makeMovie(0, 'Враг'),
+    tmdb_id: 181886,
+    original_title: 'Enemy',
+    year: 2013,
+    runtime_min: 91,
+    rating: 6.9,
+    rating_vote_count: 5123,
+    release_date: '2013-09-08',
+    upcoming: false,
+    genres: [{ id: 53, name_ru: 'Триллер', name_en: 'Thriller' }],
+    directors: [directors[0]],
+  },
+  {
+    ...makeMovie(0, 'Дюна: Мессия'),
+    tmdb_id: 1170608,
+    original_title: 'Dune: Messiah',
+    year: 2026,
+    runtime_min: undefined,
+    rating: undefined,
+    rating_vote_count: 0,
+    overview: '',
+    release_date: '2026-12-18',
+    upcoming: true,
+    genres: [genres[1]],
+    directors: [directors[0]],
+  },
+  { ...movies[0], id: 0, tmdb_id: 1, upcoming: false },
+]
 let items = [...movies, ...movies].map((movie, i) => ({
   id: i + 1,
   movie,
@@ -258,6 +290,114 @@ http
                 .filter((g) => g.want_to_watch_count + g.watched_count > 0)
             : genres,
         })
+      const catalogMatch = p.match(
+        /^\/api\/v1\/catalog\/(tmdb|kinopoisk)\/(movie|tv)\/(\d+)$/,
+      )
+      if (catalogMatch) {
+        const title = catalogTitles.find(
+          (m) =>
+            catalogMatch[1] === 'tmdb' &&
+            m.media_type === catalogMatch[2] &&
+            m.tmdb_id === +catalogMatch[3],
+        )
+        if (!title)
+          return send(res, 404, {
+            code: 'not_found',
+            message: 'Тайтл не найден в каталоге',
+          })
+        const owned = items.find((x) => x.movie.tmdb_id === title.tmdb_id)
+        return send(
+          res,
+          200,
+          owned
+            ? {
+                ...title,
+                user_movie_id: owned.id,
+                status: owned.status,
+                user_rating: owned.user_rating || undefined,
+              }
+            : title,
+        )
+      }
+      if (p === '/api/v1/movies' && req.method === 'POST') {
+        const title = catalogTitles.find(
+          (m) =>
+            m.tmdb_id === body.external_id && m.media_type === body.media_type,
+        )
+        if (!title)
+          return send(res, 404, {
+            code: 'not_found',
+            message: 'Тайтл не найден в каталоге',
+          })
+        const duplicate = items.find((x) => x.movie.tmdb_id === title.tmdb_id)
+        if (duplicate)
+          return send(res, 409, {
+            code: 'already_in_collection',
+            message: 'Уже в коллекции',
+            existing_user_movie_id: duplicate.id,
+          })
+        const { upcoming, release_date, ...movie } = title
+        const item = {
+          id: Math.max(...items.map((x) => x.id)) + 1,
+          movie: { ...movie, id: 100 + items.length },
+          status: body.status || 'want_to_watch',
+          user_rating: body.user_rating || 0,
+          review: body.review || '',
+          note: '',
+          source: 'manual',
+          added_at: new Date().toISOString(),
+          watched_at:
+            body.status === 'watched' ? new Date().toISOString() : undefined,
+        }
+        items.push(item)
+        return send(res, 201, item)
+      }
+      if (p === '/api/v1/directors/17/profile') {
+        const filmography = catalogTitles.map((m) => {
+          const owned = items.find((x) => x.movie.tmdb_id === m.tmdb_id)
+          return {
+            tmdb_id: m.tmdb_id,
+            media_type: m.media_type,
+            title: m.title,
+            original_title: m.original_title,
+            year: m.year,
+            release_date: m.release_date,
+            rating: m.rating ?? null,
+            vote_count: m.rating_vote_count ?? 0,
+            upcoming: !!m.upcoming,
+            user_movie_id: owned?.id,
+            status: owned?.status,
+            user_rating: owned?.user_rating || undefined,
+          }
+        })
+        filmography.push({
+          media_type: 'movie',
+          movie_id: 900,
+          title: 'Работа только из Кинопоиска',
+          original_title: 'Работа только из Кинопоиска',
+          year: 1998,
+          rating: null,
+          vote_count: 0,
+          upcoming: false,
+        })
+        const count = (status) =>
+          filmography.filter((w) => w.status === status).length
+        return send(res, 200, {
+          ...directors[0],
+          known_for: ['Дюна', 'Прибытие'],
+          followed: true,
+          filmography_complete: true,
+          work_count: filmography.length,
+          in_collection_count: count('watched') + count('want_to_watch'),
+          watched_count: count('watched'),
+          want_to_watch_count: count('want_to_watch'),
+          rated_count: 0,
+          average_user_rating: null,
+          biography: '',
+          stale: false,
+          filmography,
+        })
+      }
       if (p === '/api/v1/movies') {
         const query = (url.searchParams.get('q') || '').toLowerCase(),
           ids = (url.searchParams.get('genre_ids') || '')

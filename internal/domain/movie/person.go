@@ -71,10 +71,16 @@ type DirectorWork struct {
 
 // Upcoming — работа ещё не вышла или дата выхода неизвестна.
 func (w DirectorWork) Upcoming(now time.Time) bool {
-	if w.ReleaseDate != nil {
-		return w.ReleaseDate.After(now)
+	return IsUpcoming(w.ReleaseDate, w.Year, now)
+}
+
+// IsUpcoming — общее правило «ещё не вышло»: точная дата в будущем, а без
+// даты — год позже текущего или неизвестен вовсе.
+func IsUpcoming(releaseDate *time.Time, year int16, now time.Time) bool {
+	if releaseDate != nil {
+		return releaseDate.After(now)
 	}
-	return w.Year == 0 || int(w.Year) > now.Year()
+	return year == 0 || int(year) > now.Year()
 }
 
 // MinVotesForRating — ниже этого числа голосов рейтинг каталога не показываем:

@@ -17,10 +17,18 @@ import type {
 export class RequestError extends Error {
   readonly code: string
   readonly existingUserMovieId?: number
-  constructor(code: string, message: string, existingUserMovieId?: number) {
+  // HTTP-статус ответа; у сетевых сбоев его нет.
+  readonly status?: number
+  constructor(
+    code: string,
+    message: string,
+    existingUserMovieId?: number,
+    status?: number,
+  ) {
     super(message)
     this.code = code
     this.existingUserMovieId = existingUserMovieId
+    this.status = status
   }
 }
 export async function request<T>(
@@ -53,6 +61,7 @@ export async function request<T>(
       body?.code ?? 'unknown',
       body?.message ?? 'Не удалось выполнить запрос. Попробуйте ещё раз.',
       body?.existing_user_movie_id,
+      response.status,
     )
   return body as T
 }

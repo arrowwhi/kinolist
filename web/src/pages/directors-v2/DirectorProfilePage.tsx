@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { RequestError } from '../../api/client'
 import { directorsApi, filmographyKey } from '../../api/directors'
 import type { FilmographyItem } from '../../api/directors'
+import { catalogPath } from '../../shared/lib/navigation'
 import type { Navigate } from '../../shared/lib/navigation'
 import { Shell } from '../../widgets/app-shell/Shell'
 import { Chip } from '../../shared/ui/Chip'
@@ -356,7 +357,18 @@ export function DirectorProfilePage({
                   key={filmographyKey(item)}
                   item={item}
                   adding={adding === filmographyKey(item)}
-                  onOpen={(userMovieId) => navigate(`/movie/${userMovieId}`)}
+                  onOpen={(work) =>
+                    navigate(
+                      work.user_movie_id != null
+                        ? `/movie/${work.user_movie_id}`
+                        : catalogPath({
+                            provider: 'tmdb',
+                            mediaType: work.media_type,
+                            externalId: work.tmdb_id!,
+                            directorId: director.id,
+                          }),
+                    )
+                  }
                   onAdd={addWork}
                 />,
               ]

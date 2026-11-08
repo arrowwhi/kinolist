@@ -238,10 +238,25 @@ type TMDBPersonRequest struct {
 	TMDBID int32 `json:"tmdb_id"`
 }
 
-// AddMovieRequest — быстрое добавление работы из фильмографии.
+// AddMovieRequest — добавление работы из каталога (фильмография режиссёра,
+// карточка каталога). Оценка и отзыв — для «Уже смотрел».
 type AddMovieRequest struct {
 	Provider   string `json:"provider"`
 	ExternalID int32  `json:"external_id"`
 	MediaType  string `json:"media_type"`
 	Status     string `json:"status,omitempty"`
+	UserRating int16  `json:"user_rating,omitempty"`
+	Review     string `json:"review,omitempty"`
+}
+
+// CatalogMovie — карточка работы прямо из каталога. Поля Movie плюс дата
+// выхода и пометки коллекции текущего пользователя; id равен 0, если работы
+// нет в общем справочнике.
+type CatalogMovie struct {
+	Movie
+	ReleaseDate string `json:"release_date,omitempty"`
+	Upcoming    bool   `json:"upcoming"`
+	UserMovieID int64  `json:"user_movie_id,omitempty"`
+	Status      string `json:"status,omitempty"`
+	UserRating  int16  `json:"user_rating,omitempty"`
 }

@@ -5,6 +5,7 @@ import {
   contentCount,
   movieMetadata,
   seasonCount,
+  upcomingLabel,
 } from '../src/entities/movie/metadata.ts'
 import { defaultFilters } from '../src/features/collection/model.ts'
 
@@ -53,4 +54,15 @@ test('statistics labels match the current media filter and reset returns all typ
   assert.equal(contentCount(2, 'tv'), '2 сериала')
   assert.equal(contentCount(5, 'movie'), '5 фильмов')
   assert.equal(defaultFilters('watched').mediaType, undefined)
+})
+
+test('upcoming label shows the release month when the date has one', () => {
+  assert.equal(upcomingLabel('2026-12-18'), 'Скоро · декабрь 2026')
+  assert.equal(upcomingLabel('2027-05-01', 2026), 'Скоро · май 2027')
+  assert.equal(upcomingLabel('2026-03'), 'Скоро · март 2026')
+  assert.equal(upcomingLabel('2026'), 'Скоро · 2026')
+  assert.equal(upcomingLabel(undefined, 2026), 'Скоро · 2026')
+  assert.equal(upcomingLabel('', 2026), 'Скоро · 2026')
+  assert.equal(upcomingLabel(), 'Скоро')
+  assert.equal(upcomingLabel('2026-13-01'), 'Скоро · 2026')
 })

@@ -183,6 +183,21 @@ func (mr *MockmovieRepositoryMockRecorder) Add(ctx, um any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockmovieRepository)(nil).Add), ctx, um)
 }
 
+// CatalogMark mocks base method.
+func (m *MockmovieRepository) CatalogMark(ctx context.Context, userID int64, provider movie.Provider, externalID int32, mt movie.MediaType) (movie.CatalogMark, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CatalogMark", ctx, userID, provider, externalID, mt)
+	ret0, _ := ret[0].(movie.CatalogMark)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CatalogMark indicates an expected call of CatalogMark.
+func (mr *MockmovieRepositoryMockRecorder) CatalogMark(ctx, userID, provider, externalID, mt any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CatalogMark", reflect.TypeOf((*MockmovieRepository)(nil).CatalogMark), ctx, userID, provider, externalID, mt)
+}
+
 // GenresByExternalNames mocks base method.
 func (m *MockmovieRepository) GenresByExternalNames(ctx context.Context, p movie.Provider, names []string) ([]movie.Genre, error) {
 	m.ctrl.T.Helper()

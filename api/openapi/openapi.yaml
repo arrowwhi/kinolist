@@ -330,8 +330,10 @@ paths:
     post:
       summary: Добавить работу в коллекцию по внешнему id
       description: |
-        Быстрое добавление из фильмографии режиссёра, без поиска и задачи.
-        Статус по умолчанию want_to_watch. Дубль — 409 с existing_user_movie_id.
+        Быстрое добавление из фильмографии режиссёра и карточки каталога, без
+        поиска и задачи. Статус по умолчанию want_to_watch. «Уже смотрел» —
+        status=watched с необязательными user_rating и review; правила проверки
+        те же, что у POST /jobs/{id}/confirm. Дубль — 409 с existing_user_movie_id.
       requestBody:
         required: true
         content:
@@ -344,6 +346,13 @@ paths:
                 external_id: { type: integer, format: int32, minimum: 1 }
                 media_type: { type: string, enum: [movie, tv] }
                 status: { $ref: '#/components/schemas/Status' }
+                user_rating:
+                  type: integer
+                  minimum: 0
+                  maximum: 10
+                  default: 0
+                  description: 0 или отсутствие — без оценки; иначе 1–10
+                review: { type: string, maxLength: 5000 }
       responses:
         '201':
           description: Добавлено
@@ -358,6 +367,33 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+
+  /catalog/{provider}/{media_type}/{external_id}:
+    get:
+      summary: Карточка работы прямо из каталога
+      description: |
+        Подробности работы по внешнему id — для фильмографии режиссёра, где
+        работы может не быть в коллекции. Данные берутся тем же путём, что и при
+        добавлении (TMDB с кэшем catalog_cache; kinopoisk — только если настроен
+        запасной каталог, иначе 502). id равен 0, если работы нет в общем
+        справочнике; user_movie_id/status/user_rating есть, только если работа
+        уже в коллекции текущего пользователя. upcoming считается по правилу
+        фильмографии: дата выхода в будущем, а без даты — год позже текущего или
+        неизвестен; для работы из коллекции всегда false.
+      parameters:
+        - { name: provider, in: path, required: true, schema: { type: string, enum: [tmdb, kinopoisk] } }
+        - { name: media_type, in: path, required: true, schema: { type: string, enum: [movie, tv] } }
+        - { name: external_id, in: path, required: true, schema: { type: integer, format: int32, minimum: 1 } }
+      responses:
+        '200':
+          description: Карточка работы
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CatalogMovie' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '502': { $ref: '#/components/responses/BadGateway' }
 
   /movies/{id}:
@@ -725,6 +761,21 @@ components:
         genres:
           type: array
           items: { $ref: '#/components/schemas/Genre' }
+
+    CatalogMovie:
+      allOf:
+        - $ref: '#/components/schemas/Movie'
+        - type: object
+          required: [upcoming]
+          properties:
+            release_date:
+              type: string
+              format: date
+              description: Дата выхода (у сериала — первого эфира); нет, если каталог её не знает
+            upcoming: { type: boolean }
+            user_movie_id: { type: integer, format: int64, description: Есть, только если работа в коллекции }
+            status: { $ref: '#/components/schemas/Status' }
+            user_rating: { type: integer, minimum: 1, maximum: 10 }
 
     UserMovie:
       type: object

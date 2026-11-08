@@ -49,6 +49,16 @@ export interface Movie {
   genres: Genre[]
 }
 
+// Карточка тайтла из каталога (GET /catalog/{provider}/{media_type}/{id}).
+// user_movie_id, status и user_rating есть, только если тайтл уже в коллекции.
+export interface CatalogMovie extends Movie {
+  release_date?: string
+  upcoming: boolean
+  user_movie_id?: number
+  status?: Status
+  user_rating?: number
+}
+
 export interface UserMovie {
   id: number
   movie: Movie

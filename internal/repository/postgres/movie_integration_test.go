@@ -337,3 +337,45 @@ func TestAddDuplicateKeepsTransactionUsable(t *testing.T) {
 		t.Fatalf("transaction is unusable after a duplicate insert: %v", err)
 	}
 }
+
+func TestCatalogMarkFindsMovieAndUserEntry(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+	repo := postgres.NewMovieRepository(newManager(t))
+	owner := seedUser(t, 810)
+	other := seedUser(t, 811)
+
+	// Работы нет в справочнике — нули без ошибки.
+	mark, err := repo.CatalogMark(ctx, owner.ID, movie.ProviderTMDB, 42, movie.MediaMovie)
+	if err != nil || mark != (movie.CatalogMark{}) {
+		t.Fatalf("missing: %+v %v", mark, err)
+	}
+
+	m, err := repo.Upsert(ctx, movie.Movie{TMDBID: 42, KinopoiskID: 507, Title: "Дюна", Year: 2021, MediaType: movie.MediaMovie})
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	um, err := repo.Add(ctx, movie.UserMovie{UserID: owner.ID, Movie: m, Status: movie.StatusWatched, UserRating: 9})
+	if err != nil {
+		t.Fatalf("add: %v", err)
+	}
+
+	mark, err = repo.CatalogMark(ctx, owner.ID, movie.ProviderTMDB, 42, movie.MediaMovie)
+	if err != nil || mark.MovieID != m.ID || mark.UserMovieID != um.ID || mark.Status != movie.StatusWatched || mark.UserRating != 9 {
+		t.Fatalf("owner: %+v %v", mark, err)
+	}
+	mark, err = repo.CatalogMark(ctx, owner.ID, movie.ProviderKinopoisk, 507, movie.MediaMovie)
+	if err != nil || mark.UserMovieID != um.ID {
+		t.Fatalf("kinopoisk: %+v %v", mark, err)
+	}
+	// Чужая коллекция не видна, но id справочника есть.
+	mark, err = repo.CatalogMark(ctx, other.ID, movie.ProviderTMDB, 42, movie.MediaMovie)
+	if err != nil || mark.MovieID != m.ID || mark.UserMovieID != 0 || mark.Status != "" {
+		t.Fatalf("other user: %+v %v", mark, err)
+	}
+	// Тот же tmdb id у сериала — другая работа.
+	mark, err = repo.CatalogMark(ctx, owner.ID, movie.ProviderTMDB, 42, movie.MediaTV)
+	if err != nil || mark != (movie.CatalogMark{}) {
+		t.Fatalf("tv: %+v %v", mark, err)
+	}
+}
