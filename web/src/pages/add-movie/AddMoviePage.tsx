@@ -172,14 +172,47 @@ export function AddMoviePage({
                   className="add-form__paste"
                   onClick={() => void paste()}
                   disabled={flow.busy}
+                  aria-label="Вставить из буфера обмена"
+                  title="Вставить"
                 >
-                  Вставить
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="22"
+                    height="22"
+                    fill="none"
+                    aria-hidden="true"
+                  >
+                    <rect
+                      x="6"
+                      y="4.5"
+                      width="12"
+                      height="16"
+                      rx="2.5"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                    />
+                    <rect
+                      x="9"
+                      y="3"
+                      width="6"
+                      height="3.5"
+                      rx="1.2"
+                      fill="currentColor"
+                    />
+                    <path
+                      d="M9.5 11h5M9.5 14.5h5"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                    />
+                  </svg>
                 </Button>
               </div>
             </div>
             <InlineError message={flow.error} />
             <Button
               type="submit"
+              className="add-form__submit"
               disabled={!flow.input.trim()}
               busy={flow.busy}
             >

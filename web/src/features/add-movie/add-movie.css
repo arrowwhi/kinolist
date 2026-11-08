@@ -15,10 +15,16 @@
 .add-form__row > .field-label {
   flex: 1;
 }
+/* Квадратная кнопка-иконка «Вставить» и невысокая «Найти» (Figma, экран 29). */
 .add-form__paste {
   flex: none;
-  width: auto;
-  padding: 0 16px;
+  width: 48px;
+  min-height: 48px;
+  padding: 0;
+}
+.add-form__submit {
+  min-height: 44px;
+  padding-block: 10px;
 }
 .search-progress {
   display: flex;
@@ -34,35 +40,16 @@
   text-wrap: balance;
 }
 /* Добавление из рилса (Figma: «Добавление из рилса», экраны 22–25). */
-.reel-hint,
+.reel-hint {
+  margin: 0;
+}
 .reel-source {
-  padding: 16px;
   border-radius: var(--radius-md);
   background: var(--color-surface);
   box-shadow: inset 0 0 0 1px var(--color-edge);
-}
-.reel-hint {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.reel-hint__head,
-.reel-source {
   display: flex;
   align-items: center;
   gap: 12px;
-}
-.reel-hint__title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-}
-.reel-hint__text {
-  margin: 2px 0 0;
-  font-size: 13px;
-}
-.reel-hint .small {
-  margin: 0;
 }
 .caption-patterns {
   display: flex;

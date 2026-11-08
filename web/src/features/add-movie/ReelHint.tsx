@@ -28,22 +28,12 @@ export function CaptionPatterns() {
   )
 }
 
-/** Карточка-подсказка на экране добавления. */
+/** Короткая подсказка под формой добавления (Figma, экран 29). */
 export function ReelHint() {
   return (
-    <section className="reel-hint" aria-label="Добавление по ссылке на рилс">
-      <div className="reel-hint__head">
-        <ReelIcon />
-        <div>
-          <h2 className="reel-hint__title">Нашёл кино в рилсе?</h2>
-          <p className="muted reel-hint__text">
-            Вставь ссылку — название найдём в описании
-          </p>
-        </div>
-      </div>
-      <p className="muted small">Быстрее всего узнаём так:</p>
-      <CaptionPatterns />
-    </section>
+    <p className="muted small reel-hint">
+      Можно вставить ссылку на рилс из Instagram — название найдём в описании.
+    </p>
   )
 }
 
