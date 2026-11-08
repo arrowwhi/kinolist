@@ -254,8 +254,8 @@ export function DirectorProfilePage({
             <dd>{want}</dd>
           </div>
           <div>
-            <dt>Не в коллекции</dt>
-            <dd>{missing}</dd>
+            <dt>Всего</dt>
+            <dd>{works.length}</dd>
           </div>
         </dl>
       </section>
