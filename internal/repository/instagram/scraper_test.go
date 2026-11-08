@@ -22,6 +22,14 @@ func TestParseHandlesProviderFormats(t *testing.T) {
 			wantCaption: "Брат 1997", wantFrames: 1,
 		},
 		{
+			name: "scrapecreators graphql media",
+			payload: `{"success":true,"data":{"xdt_shortcode_media":{
+				"display_url":"https://cdn/z.jpg","owner":{"username":"filmcooore"},
+				"edge_media_to_caption":{"edges":[{"node":{"text":"«Начало» (2010)"}}]},
+				"edge_media_preview_comment":{"edges":[{"node":{"text":"Паприка"}}]}}}}`,
+			wantCaption: "«Начало» (2010)", wantFrames: 1,
+		},
+		{
 			name:        "description fallback",
 			payload:     `{"description":"Fight Club"}`,
 			wantCaption: "Fight Club", wantFrames: 0,

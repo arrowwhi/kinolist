@@ -95,7 +95,7 @@ make run                  # сервис на :8080
 | `DIRECTOR_SYNC_INTERVAL` | `30m` | Период фонового обновления фильмографий |
 | `DIRECTOR_SYNC_BATCH` | `20` | Сколько режиссёров обновлять за один проход |
 | `INSTAGRAM_API_KEY` | — | Ключ скрапера; пусто — ссылки отклоняются |
-| `INSTAGRAM_BASE_URL` | — | Эндпоинт скрапера |
+| `INSTAGRAM_BASE_URL` | — | Эндпоинт скрапера, например `https://api.scrapecreators.com/v1/instagram/post` (ScrapeCreators) |
 | `INSTAGRAM_TIMEOUT` | `30s` | Таймаут запроса |
 | `LLM_API_KEY` | — | Ключ модели; пусто — по подписи работают только правила (кавычки и т.п.) |
 | `LLM_BASE_URL` | `https://api.anthropic.com` | База API |

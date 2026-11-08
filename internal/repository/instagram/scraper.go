@@ -107,6 +107,22 @@ type response struct {
 		Thumbnail   string `json:"thumbnail_url"`
 		DisplayURL  string `json:"display_url"`
 		Username    string `json:"username"`
+		// ScrapeCreators (/v1/instagram/post) отдаёт сырой GraphQL-ответ
+		// Instagram: описание — в edge_media_to_caption, автор — в owner.
+		Media *struct {
+			Caption struct {
+				Edges []struct {
+					Node struct {
+						Text string `json:"text"`
+					} `json:"node"`
+				} `json:"edges"`
+			} `json:"edge_media_to_caption"`
+			DisplayURL   string `json:"display_url"`
+			ThumbnailSrc string `json:"thumbnail_src"`
+			Owner        struct {
+				Username string `json:"username"`
+			} `json:"owner"`
+		} `json:"xdt_shortcode_media"`
 	} `json:"data"`
 }
 
@@ -124,6 +140,14 @@ func parse(payload []byte) (enrichment.ReelContent, error) {
 		caption = firstNonEmpty(caption, r.Data.CaptionText, r.Data.Caption)
 		thumb = firstNonEmpty(thumb, r.Data.Thumbnail, r.Data.DisplayURL)
 		author = firstNonEmpty(author, r.Data.Username)
+
+		if m := r.Data.Media; m != nil {
+			if len(m.Caption.Edges) > 0 {
+				caption = firstNonEmpty(caption, m.Caption.Edges[0].Node.Text)
+			}
+			thumb = firstNonEmpty(thumb, m.DisplayURL, m.ThumbnailSrc)
+			author = firstNonEmpty(author, m.Owner.Username)
+		}
 	}
 
 	content := enrichment.ReelContent{Caption: caption, Author: author}
