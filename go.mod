@@ -4,7 +4,7 @@ go 1.26.3
 
 require (
 	github.com/Masterminds/squirrel v1.5.4
-	github.com/arrowwhi/infrastructure v0.0.0-20261107235455-d1eefa7b1f6a
+	github.com/arrowwhi/infrastructure v0.0.0-20261107235455-66d8f7f29ed0
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
